@@ -1,5 +1,10 @@
 import numpy as np
 
+
+# IT SHOULD (or need to) BE COMPLETELY TRANSLATED INTO THEANO LANGUAGE...
+# (Not numpy arrays, but Theano tensors)
+
+
 def meanIU(prediction, GrTruth):
     '''
     Inputs:
@@ -8,9 +13,9 @@ def meanIU(prediction, GrTruth):
     Return averaged Intersection over union for each sample:
       - array (N)
 
-    (BAD OPTIMIZED)
+    NOT WORKING, NEEDS THEANO IMPLEMENTATION
     '''
-    N, C = prediction.shape[:2]
+    N, C = prediction.shape[:2] # Are not numbers, can not be used to create a numpy array
     predLabels = np.argmax(prediction, axis=1)
 
     n = np.ones((N,C,C))
@@ -25,19 +30,26 @@ def meanIU(prediction, GrTruth):
     meanIU = 1./C * np.sum(diag_n / (n.sum(axis=2)+n.sum(axis=1)-diag_n), axis=1 )
     return meanIU
 
-
+import theano.tensor as T
 def pixel_accuracy(prediction, GrTruth):
     '''
+
     Inputs:
       - prediction: shape (N, class, dimX, dimY) of float32. Should come from a sigmoid or softmax
-      - ground truth: shape (N, dimX, dimY) of int32. Classes should start from 0.
+      - ground truth: shape (N, dimX, dimY) of int. Classes should start from 0.
+            Actually even a tensor (N, class, dimX, dimY) can be accepted.
 
     Return pixel accuracy [sum(right_pixels)/all_pixels] for each sample:
       - array (N)
-    '''
-    predLabels = np.argmax(prediction, axis=1)
 
-    right_pixels = (predLabels==GrTruth).sum(axis=(1,2)) # Sum over image dims.
+    '''
+    predLabels = T.argmax(prediction, axis=1)
+
+    # Check if I have [0,0,1,0,0] instead of a label in GrTruth:
+    if prediction.ndim==GrTruth.ndim:
+        GrTruth = T.argmax(GrTruth, axis=1)
+
+    right_pixels = T.sum( T.eq(predLabels, GrTruth), axis=(1,2)) # Sum over image dims.
     n_pixels = GrTruth.shape[1]*GrTruth.shape[2]
     return right_pixels/n_pixels
 

@@ -1,0 +1,5 @@
+*.pdf
+*.swp
+*.pyc
+.env/*
+*.DS_store
