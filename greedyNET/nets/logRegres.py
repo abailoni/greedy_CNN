@@ -47,9 +47,9 @@ class fit_residuals(BatchIterator):
 
 
     def transform(self, Xb, yb):
-        # Not working for some reason...
-        if Xb.ndim!=yb.ndim:
-            raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with floats [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class numbers.')
+        if yb!=None:
+            if Xb.ndim!=yb.ndim:
+                raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with ints [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class labels.')
 
         # Fit on residuals:
         if self.best_classifier:
@@ -63,13 +63,14 @@ class fit_residuals(BatchIterator):
 class LogRegr(object):
     '''
     Inputs:
-        - filter_size (8)
+        - filter_size (7): requires an odd size to keep the same output dimension
         - num_classes (2)
         - imgShape (1024,768): used for the final residuals
         - channels_input (64): can not be set to 'None'
         - xy_input (None, None): if not set then the network can be reused for different inputs
         - best_classifier (None): best previous classifier
         - batch_size (100)
+        - eval_size (0.1): decide the cross-validation proportion. Do not use the option "train_split" of NeuralNet!
         - all additional parameters of NeuralNet
           (e.g. update=adam, max_epochs, update_learning_rate, etc..)
 
@@ -77,7 +78,6 @@ class LogRegr(object):
     in order to implement a boosting classification, the fit function as targets y should get a matrix with floats [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class numbers.
 
     To be fixed:
-        - Padding is not automatic..
         - a change in the batch_size should update the batchIterator
     '''
     def __init__(self,**kwargs):
@@ -88,13 +88,16 @@ class LogRegr(object):
         self.xy_input = kwargs.pop('xy_input', (None, None))
         self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
         self.best_classifier = kwargs.pop('best_classifier', False)
+        self.eval_size = kwargs.pop('eval_size', 0.1)
+        if "train_split" in kwargs:
+            raise ValueError('The option train_split is not used. Use eval_size instead.')
 
         netLayers = [
             # layer dealing with the input data
             (layers.InputLayer, {'shape': (None, self.channels_input, self.xy_input[0], self.xy_input[1])}),
 
             # first stage of our convolutional layers
-            (layers.Conv2DLayer, {'name': 'convLayer', 'num_filters': self.num_classes, 'filter_size': self.filter_size, 'pad':3, 'nonlinearity': softmax_segm}),
+            (layers.Conv2DLayer, {'name': 'convLayer', 'num_filters': self.num_classes, 'filter_size': self.filter_size, 'pad':'same', 'nonlinearity': softmax_segm}),
             (UpScaleLayer, {'imgShape':self.imgShape}),
         ]
 
@@ -102,6 +105,7 @@ class LogRegr(object):
             batch_iterator_train = fit_residuals(batch_size=self.batch_size,best_classifier=self.best_classifier),
             batch_iterator_test = fit_residuals(batch_size=self.batch_size,best_classifier=self.best_classifier),
             y_tensor_type = T.itensor4,
+            eval_size=self.eval_size,
             **kwargs
         )
         print "\n\n---------------------------\nCompiling network...\n---------------------------"

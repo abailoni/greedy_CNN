@@ -1,4 +1,5 @@
 import numpy as np
+import theano.tensor as T
 
 
 # IT SHOULD (or need to) BE COMPLETELY TRANSLATED INTO THEANO LANGUAGE...
@@ -30,7 +31,6 @@ def meanIU(prediction, GrTruth):
     meanIU = 1./C * np.sum(diag_n / (n.sum(axis=2)+n.sum(axis=1)-diag_n), axis=1 )
     return meanIU
 
-import theano.tensor as T
 def pixel_accuracy(prediction, GrTruth):
     '''
 
@@ -50,7 +50,7 @@ def pixel_accuracy(prediction, GrTruth):
         GrTruth = T.argmax(GrTruth, axis=1)
 
     right_pixels = T.sum( T.eq(predLabels, GrTruth), axis=(1,2)) # Sum over image dims.
-    n_pixels = GrTruth.shape[1]*GrTruth.shape[2]
+    n_pixels = T.cast(GrTruth.shape[1]*GrTruth.shape[2], 'float32')
     return right_pixels/n_pixels
 
 # def mean_accuracy(prediction, GrTruth):

@@ -62,6 +62,8 @@ def softmax_segm(x):
     results = softmax(x_mod)
     return results.reshape(shape)
 
+from nolearn.lasagne.base import TrainSplit
+
 
 class segmNeuralNet(NeuralNet):
     '''
@@ -71,12 +73,13 @@ class segmNeuralNet(NeuralNet):
      - for training: store pixel acc. history
      - for validation: store pixel accuracy and meanIU history
 
-    It won't probably work. It expects theano inputs, not arrays..
     '''
     def __init__(self,*args,**kwargs):
+        eval_size = kwargs.pop('eval_size', 0.1)
+        kwargs['train_split'] = TrainSplit(eval_size=eval_size,stratify=False)
         kwargs['objective_loss_function'] = categorical_crossentropy_segm
-        kwargs['scores_train'] = [('pixAcc_train', pixel_accuracy)]
-        # kwargs['scores_valid'] = [('pixAcc_val', pixel_accuracy)]
+        kwargs['scores_train'] = [('trn pixelAcc', pixel_accuracy)]
+        kwargs['scores_valid'] = [('val pixelAcc', pixel_accuracy)]
         # kwargs['scores_valid'] = [('pixAcc', pixel_accuracy), ('meanIU', meanIU)]
         super(segmNeuralNet, self).__init__(*args, **kwargs)
 
