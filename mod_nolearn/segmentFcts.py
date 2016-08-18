@@ -6,6 +6,7 @@ import theano.tensor as T
 # (Not numpy arrays, but Theano tensors)
 
 
+# from theano import shared
 def meanIU(prediction, GrTruth):
     '''
     Inputs:
@@ -17,18 +18,21 @@ def meanIU(prediction, GrTruth):
     NOT WORKING, NEEDS THEANO IMPLEMENTATION
     '''
     N, C = prediction.shape[:2] # Are not numbers, can not be used to create a numpy array
-    predLabels = np.argmax(prediction, axis=1)
+    predLabels = T.argmax(prediction, axis=1)
 
-    n = np.ones((N,C,C))
+    n_theano = T.itensor3()
+    n = T.ones_like(n_theano)
+    # n = shared(0)
+    # n = np.ones((N,C,C))
     for cl in range(C):
         # BAD OPTIMIZED, need better implementation ---------------
         for i in range(N):
-            idxs = (GrTruth[i]==cl).nonzero()
-            predClass, numPixels = np.unique(predLabels[i,idxs],return_counts=True)
+            idxs = (T.eq(GrTruth[i],cl)).nonzero()
+            predClass, numPixels = T.unique(predLabels[i,idxs],return_counts=True)
             n[i,cl,predClass] = numPixels
 
-    diag_n = np.diagonal(n,axis1=1,axis2=2)
-    meanIU = 1./C * np.sum(diag_n / (n.sum(axis=2)+n.sum(axis=1)-diag_n), axis=1 )
+    diag_n = T.diagonal(n,axis1=1,axis2=2)
+    meanIU = 1./C * T.sum(diag_n / (n.sum(axis=2)+n.sum(axis=1)-diag_n), axis=1 )
     return meanIU
 
 def pixel_accuracy(prediction, GrTruth):

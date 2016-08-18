@@ -1,9 +1,12 @@
 import time
+import numpy as np
 
 from lasagne import layers
 
 from lasagne.layers import set_all_param_values, get_all_param_values
 import lasagne.init
+
+from scipy.fftpack import dct
 
 from mod_nolearn.nets.segmNet import segmNeuralNet, softmax_segm
 DEFAULT_imgShape = (1024,768)
@@ -40,20 +43,35 @@ from nolearn.lasagne import BatchIterator
 import theano.tensor as T
 from theano.tensor import abs_
 
-class fit_residuals(BatchIterator):
+class segmBatchIterator(BatchIterator):
+    '''
+    It modifies the inputs using the processInput() class.
+    Optionally it modifies the targets to fit the residuals (boosting).
+
+    Inputs:
+      - processInput (None): to apply DCT or previous fixed layers. Example of input: processInput(DCT_size=4)
+      - best_classifier (None): to fit the residuals
+      - usual batch_size
+    '''
     def __init__(self, *args, **kwargs):
-        self.best_classifier = kwargs.pop('best_classifier', False)
-        super(fit_residuals, self).__init__(*args, **kwargs)
+        self.best_classifier = kwargs.pop('best_classifier', None)
+        self.processInput = kwargs.pop('processInput', None)
+        super(segmBatchIterator, self).__init__(*args, **kwargs)
 
 
     def transform(self, Xb, yb):
-        if yb!=None:
+        # Process inputs:
+        if self.processInput:
+            Xb = self.processInput(Xb)
+
+        # This actually is true only for the logistic regression...
+        if yb is not None:
             if Xb.ndim!=yb.ndim:
                 raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with ints [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class labels.')
 
         # Fit on residuals:
         if self.best_classifier:
-            pred = self.best_classifier.predict(Xb) #[N,C,x,y]
+            pred = self.best_classifier.predict_proba(Xb) #[N,C,x,y]
             yb = abs_(pred - yb)
             print "Ciao"
 
@@ -66,12 +84,14 @@ class LogRegr(object):
         - filter_size (7): requires an odd size to keep the same output dimension
         - num_classes (2)
         - imgShape (1024,768): used for the final residuals
-        - channels_input (64): can not be set to 'None'
+        - channels_image (3): channels of the original image
         - xy_input (None, None): if not set then the network can be reused for different inputs
         - best_classifier (None): best previous classifier
         - batch_size (100)
         - eval_size (0.1): decide the cross-validation proportion. Do not use the option "train_split" of NeuralNet!
-        - all additional parameters of NeuralNet
+        - DCT_size (7)
+        - fixed_previous_layers (None): if this is set, DCT_size is ignored (and channels_image is redundant)
+        - all additional parameters of NeuralNet.
           (e.g. update=adam, max_epochs, update_learning_rate, etc..)
 
     IMPORTANT REMARK:
@@ -79,12 +99,14 @@ class LogRegr(object):
 
     To be fixed:
         - a change in the batch_size should update the batchIterator
+        - add a method to update the input-processor
+        - channels_input with previous fixed layers
     '''
     def __init__(self,**kwargs):
         self.filter_size = kwargs.pop('filter_size', 7)
         self.num_classes = kwargs.pop('num_classes', 2)
         self.batch_size = kwargs.pop('batch_size', 100)
-        self.channels_input = kwargs.pop('channels_input', 64)
+        self.channels_image = kwargs.pop('channels_image', 3)
         self.xy_input = kwargs.pop('xy_input', (None, None))
         self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
         self.best_classifier = kwargs.pop('best_classifier', False)
@@ -92,18 +114,30 @@ class LogRegr(object):
         if "train_split" in kwargs:
             raise ValueError('The option train_split is not used. Use eval_size instead.')
 
+        # Input processing:
+        self.fixed_previous_layers = kwargs.pop('fixed_previous_layers', None)
+        if self.fixed_previous_layers:
+            # self.channels_input = ???
+            if 'DCT_size' in kwargs:
+                raise Warning('DCT_size ignored. Use output of previous fixed layers instead.')
+        else:
+            self.DCT_size = kwargs.pop('DCT_size', 7)
+            self.channels_input = self.channels_image * self.DCT_size**2
+        customBatchIterator = segmBatchIterator(batch_size=self.batch_size,best_classifier=self.best_classifier, processInput=processInput(DCT_size=self.DCT_size,fixed_layers=self.fixed_previous_layers))
+
+        # Layers:
         netLayers = [
             # layer dealing with the input data
             (layers.InputLayer, {'shape': (None, self.channels_input, self.xy_input[0], self.xy_input[1])}),
 
             # first stage of our convolutional layers
             (layers.Conv2DLayer, {'name': 'convLayer', 'num_filters': self.num_classes, 'filter_size': self.filter_size, 'pad':'same', 'nonlinearity': softmax_segm}),
-            (UpScaleLayer, {'imgShape':self.imgShape}),
+            # (UpScaleLayer, {'imgShape':self.imgShape}),
         ]
 
         self.net = segmNeuralNet(layers=netLayers,
-            batch_iterator_train = fit_residuals(batch_size=self.batch_size,best_classifier=self.best_classifier),
-            batch_iterator_test = fit_residuals(batch_size=self.batch_size,best_classifier=self.best_classifier),
+            batch_iterator_train = customBatchIterator,
+            batch_iterator_test = customBatchIterator,
             y_tensor_type = T.itensor4,
             eval_size=self.eval_size,
             **kwargs
@@ -112,12 +146,14 @@ class LogRegr(object):
         tick = time.time()
         self.net.initialize()
         tock = time.time()
-        print "Done! (%f sec.)" %(tock-tick)
+        print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
     def set_bestClassifier(self, best_classifier):
+        ''' Needs to be updated with right input...'''
         self.best_classifier = best_classifier
-        self.net.batch_iterator_train = fit_residuals(batch_size=self.batch_size,best_classifier=self.best_classifier)
-        self.net.batch_iterator_test = fit_residuals(batch_size=self.batch_size,best_classifier=self.best_classifier)
+        customBatchIterator = segmBatchIterator(batch_size=self.batch_size,best_classifier=self.best_classifier)
+        self.net.batch_iterator_train = customBatchIterator
+        self.net.batch_iterator_test = customBatchIterator
 
 
     def _reset_weights(self):
@@ -135,6 +171,56 @@ class LogRegr(object):
             newObj._reset_weights()
         return newObj
 
+
+### INPUT FUNCTION:
+
+class processInput(object):
+    '''
+    Compute the input. The function is called each time we choose a batch of data.
+
+    Arguments:
+     - DCT_size (7): size of the DCT filter, the output will have 8*8*3 filters
+     - fixed_layers (None): optional network representing the previous learned and fixed layers (the DCT filters should be included...?)
+    '''
+    def __init__(self, **kwargs):
+        self.DCT_size = kwargs.pop('DCT_size', 7)
+        self.fixed_layers = kwargs.pop('fixed_layers', None)
+        if kwargs:
+            raise Warning('Additional not necesary arguments to handleInput have been passed')
+
+    def __call__(self, batch_input):
+        if self.fixed_layers!=None:
+            batch_output = self.fixed_layers.predict_proba(batch_input)
+        else:
+            batch_output = self.apply_DCT(batch_input)
+
+        return batch_output
+
+    def apply_DCT(self, batch_input):
+        '''
+        Size of the batch_input: (N,3,dim_x,dim_y)
+        It needs to be implemented at least in cython... Or..?
+        '''
+        N, channels, dim_x, dim_y = batch_input.shape
+        pad = self.DCT_size/2
+
+        temp = np.empty((N,channels*self.DCT_size,dim_x,dim_y+2*pad)) #dct along one dim.
+        output = np.empty((N,channels*self.DCT_size**2,dim_x,dim_y), dtype=np.float32)
+        padded_input = np.pad(batch_input,pad_width=((0,0),(0,0),(pad,pad),(pad,pad)), mode='constant')
+
+        tick = time.time()
+        for i in range(dim_x):
+            # Note that (i,j) are the center of the filter in input, but are the top-left corner coord. in the padded_input
+            if i%10==0:
+                print i
+            temp[:,:,i,:] = np.reshape(dct(padded_input[:,:,i:,:], axis=2, n=self.DCT_size), (N,-1,dim_y+2*pad))
+        for j in range(dim_y):
+            if j%10==0:
+                print j
+            output[:,:,:,j] = dct(temp[:,:,:,j:], axis=3, n=self.DCT_size).reshape((N,-1,dim_x)).astype(np.float32)
+        tock = time.time()
+        print "Conversion: %g sec." %(tock-tick)
+        return output
 
 
 
