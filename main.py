@@ -39,7 +39,6 @@ my_first_net = LogRegr(
     update=adam,
     update_learning_rate=1e-2,
     update_beta1=0.9,
-    regression=False,
     max_epochs=5,
     verbose=1,
     **logRegr_params
@@ -61,12 +60,11 @@ from mod_nolearn.visualize import plot_conv_weights, plot_images
 fig = plot_conv_weights(my_first_net.net.layers_["convLayer"])
 fig.savefig("weights_before_boost1.pdf")
 
-
-my_first_net.net.fit(X_small, y_mod_small,epochs=4)
+my_first_net.net.fit(X_small, y_small,epochs=4)
 my_first_net.net.update_learning_rate = 1e-3
-my_first_net.net.fit(X_small, y_mod_small,epochs=2)
+my_first_net.net.fit(X_small, y_small,epochs=2)
 # my_first_net.net.update_learning_rate = 1e-4
-# my_first_net.net.fit(X_small, y_mod_small,epochs=10)
+# my_first_net.net.fit(X_small, y_small,epochs=10)
 
 fig = plot_conv_weights(my_first_net.net.layers_["convLayer"])
 fig.savefig("weights_after_boost1.pdf")
@@ -77,7 +75,7 @@ plot = plot_loss(my_first_net.net, "loss_boostLogRegr.pdf")
 second_network = my_first_net.clone(reset=True, setClassifier=True)
 second_network.net.update_learning_rate = 1e-2
 print "Training second Log"
-second_network.net.fit(X_small, y_mod_small,epochs=4)
+second_network.net.fit(X_small, y_small,epochs=4)
 
 
 

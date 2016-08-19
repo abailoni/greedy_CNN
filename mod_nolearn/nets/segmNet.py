@@ -90,15 +90,25 @@ class segmNeuralNet(modNeuralNet):
      - for training: store pixel acc. history
      - for validation: store pixel accuracy and meanIU history
 
+     Options: (check default values)
+     - train_split
+     - objective_loss_function
+     - scores_train
+     - scores_valid
+
     '''
     def __init__(self,*args,**kwargs):
         eval_size = kwargs.pop('eval_size', 0.1)
-        kwargs['train_split'] = TrainSplit(eval_size=eval_size,stratify=False)
-        kwargs['objective_loss_function'] = categorical_crossentropy_segm
-        kwargs['scores_train'] = [('trn pixelAcc', pixel_accuracy)]
+        kwargs.setdefault(
+            'train_split',
+            TrainSplit(eval_size=eval_size,stratify=False)
+        )
+        kwargs.setdefault('objective_loss_function', categorical_crossentropy_segm)
+        kwargs.setdefault('scores_train', [('trn pixelAcc', pixel_accuracy)])
         if eval_size!=0:
-            kwargs['scores_valid'] = [('val pixelAcc', pixel_accuracy)]
-        # kwargs['scores_valid'] = [('val pixelAcc', pixel_accuracy), ('val meanIU', meanIU)]
+            kwargs.setdefault('scores_valid', [('val pixelAcc', pixel_accuracy)])
+            # kwargs.setdefault('scores_valid', [('val pixelAcc', pixel_accuracy), ('val meanIU', meanIU)])
+
         super(segmNeuralNet, self).__init__(*args, **kwargs)
 
 

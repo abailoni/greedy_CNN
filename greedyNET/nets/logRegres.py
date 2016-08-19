@@ -7,7 +7,7 @@ from scipy.fftpack import dct
 from lasagne import layers
 from lasagne.layers import set_all_param_values, get_all_param_values
 import lasagne.init
-from mod_nolearn.nets.segmNet import segmNeuralNet, softmax_segm
+from mod_nolearn.nets.segmNet import segmNeuralNet
 
 
 DEFAULT_imgShape = (1024,768)
@@ -43,7 +43,7 @@ DEFAULT_imgShape = (1024,768)
 from nolearn.lasagne import BatchIterator
 import theano.tensor as T
 
-class segmBatchIterator(BatchIterator):
+class BatchIterator_BoostLogRegr(BatchIterator):
     '''
     It modifies the inputs using the processInput() class.
     Optionally it modifies the targets to fit the residuals (boosting).
@@ -52,43 +52,108 @@ class segmBatchIterator(BatchIterator):
       - processInput (None): to apply DCT or previous fixed layers. Example of input: processInput(DCT_size=4)
       - best_classifier (None): to fit the residuals
       - other usual options: batch_size, shuffle
+
+    Part of the class is valid in general (process inputs). Construct a subclass please...
     '''
     def __init__(self, *args, **kwargs):
         self.best_classifier = kwargs.pop('best_classifier', None)
         self.processInput = kwargs.pop('processInput', None)
-        super(segmBatchIterator, self).__init__(*args, **kwargs)
+        super(BatchIterator_BoostLogRegr, self).__init__(*args, **kwargs)
 
     def transform(self, Xb, yb):
         # Process inputs:
         if self.processInput:
             Xb = self.processInput(Xb)
 
-        # This actually is true only for the logistic regression...
+        # This part is only for boosting... Contrusct a subclass!
         if yb is not None:
-            if Xb.ndim!=yb.ndim:
-                raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with ints [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class labels.')
+            # if Xb.ndim!=yb.ndim:
+            #     raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with ints [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class labels.')
 
             # Fit on residuals:
+            yb = yb.astype(np.float32)
             if self.best_classifier:
-                pred = self.best_classifier.predict_proba(Xb) #[N,C,x,y]
-                print pred[0,:,0,0]
-                print yb[0,:,0,0]
+                pred = self.best_classifier.predict_proba(Xb) #[N,x,y]
                 yb = np.absolute(pred - yb)
-                print yb[0,:,0,0]
-                raise ValueError("Stop here")
-            else:
-                # This is not necessary in Net2 where we fit always the GrTruth
-                # because y_tensor_type can be set to T.itensor4
-                yb = yb.astype(np.float32)
-
         return Xb, yb
+
+
+# This is computing the loss:
+def binary_crossentropy_BoostLogRegr(predictions, targets):
+    """
+    MODIFICATIONS:
+        - reshape targets (pixel by pixel)
+
+    Computes the categorical cross-entropy between predictions and targets.
+    .. math:: L_i = - \\sum_j{t_{i,j} \\log(p_{i,j})}
+    Parameters
+    ----------
+    predictions : Theano 2D tensor
+        Predictions in (0, 1), such as softmax output of a neural network,
+        with data points in rows and class probabilities in columns.
+    targets : Theano 2D tensor or 1D tensor
+        Either targets in [0, 1] matching the layout of `predictions`, or
+        a vector of int giving the correct class index per data point.
+    Returns
+    -------
+    Theano 1D tensor
+        An expression for the item-wise categorical cross-entropy.
+    Notes
+    -----
+    This is the loss function of choice for multi-class classification
+    problems and softmax output units. For hard targets, i.e., targets
+    that assign all of the probability to a single class per data point,
+    providing a vector of int for the targets is usually slightly more
+    efficient than providing a matrix with a single 1.0 per row.
+    """
+    shape = predictions.shape
+    pred_mod = predictions.reshape((-1,))
+    targ_mod = targets.reshape((-1,))
+    results = 1./(shape[0]) * T.nnet.binary_crossentropy(pred_mod, targ_mod)
+    return results.reshape(shape)
+
+# This is the non-linearity, giving the scores:
+def sigmoid_BoostLogRegr(x):
+    """Softmax activation function
+    :math:`\\varphi(\\mathbf{x})_j =
+    \\frac{e^{\mathbf{x}_j}}{\sum_{k=1}^K e^{\mathbf{x}_k}}`
+    where :math:`K` is the total number of neurons in the layer. This
+    activation function gets applied row-wise.
+    Parameters
+    ----------
+    x : float32
+        The activation (the summed, weighted input of a neuron).
+    Returns
+    -------
+    float32 where the sum of the row is 1 and each single value is in [0, 1]
+        The output of the softmax function applied to the activation.
+    """
+    shape = x.shape
+    x_mod = x.reshape((-1,))
+    results = T.nnet.sigmoid(x_mod)
+    return results.reshape(shape)
+
+def pixel_accuracy_BoostLogRegr(prediction, residuals):
+    '''
+
+    Inputs:
+      - prediction: shape (N, dimX, dimY) of float32. Should come from a sigmoid
+      - ground truth: shape (N, dimX, dimY) of float32 representing GroundTruth or residuals in [0.,1.]
+
+    Return pixel accuracy [sum(right_pixels)/all_pixels] for each sample:
+      - array (N)
+
+    '''
+    right_pixels = T.sum( T.lt(T.abs_(prediction-residuals), 0.5), axis=(1,2))
+    n_pixels = T.cast(residuals.shape[1]*residuals.shape[2], 'float32')
+    return right_pixels/n_pixels
 
 
 class LogRegr(object):
     '''
     Inputs:
         - filter_size (7): requires an odd size to keep the same output dimension
-        - num_classes (2)
+        - [num_classes now fixed to 2, that means one filter...]
         - imgShape (1024,768): used for the final residuals
         - channels_image (3): channels of the original image
         - xy_input (None, None): if not set then the network can be reused for different inputs
@@ -100,7 +165,7 @@ class LogRegr(object):
         - all additional parameters of NeuralNet.
           (e.g. update=adam, max_epochs, update_learning_rate, etc..)
 
-    IMPORTANT REMARK:
+    IMPORTANT REMARK: (valid only for Classification, not LogRegres...)
     in order to implement a boosting classification, the fit function as targets y should get a matrix with floats [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class numbers.
 
     To be fixed:
@@ -111,7 +176,9 @@ class LogRegr(object):
     '''
     def __init__(self,**kwargs):
         self.filter_size = kwargs.pop('filter_size', 7)
-        self.num_classes = kwargs.pop('num_classes', 2)
+        self.num_classes = 1
+        if "num_classes" in kwargs:
+            raise Warning('No idea how to implement a classification boosting for the moment. "num_classes" parameter is fixed to 2')
         self.batch_size = kwargs.pop('batch_size', 100)
         self.channels_image = kwargs.pop('channels_image', 3)
         self.xy_input = kwargs.pop('xy_input', (None, None))
@@ -132,7 +199,7 @@ class LogRegr(object):
             self.channels_input = self.channels_image * self.DCT_size**2 if self.DCT_size else self.channels_image
 
         self.batchShuffle = True
-        customBatchIterator = segmBatchIterator(
+        customBatchIterator = BatchIterator_BoostLogRegr(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
             best_classifier=self.best_classifier,
@@ -148,15 +215,20 @@ class LogRegr(object):
             (layers.InputLayer, {'shape': (None, self.channels_input, self.xy_input[0], self.xy_input[1])}),
 
             # first stage of our convolutional layers
-            (layers.Conv2DLayer, {'name': 'convLayer', 'num_filters': self.num_classes, 'filter_size': self.filter_size, 'pad':'same', 'nonlinearity': softmax_segm}),
+            (layers.Conv2DLayer, {'name': 'convLayer', 'num_filters': self.num_classes, 'filter_size': self.filter_size, 'pad':'same', 'nonlinearity': sigmoid_BoostLogRegr}),
             # (UpScaleLayer, {'imgShape':self.imgShape}),
         ]
 
-        self.net = segmNeuralNet(layers=netLayers,
+        self.net = segmNeuralNet(
+            layers=netLayers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
-            y_tensor_type = T.ftensor4,
+            objective_loss_function = binary_crossentropy_BoostLogRegr,
+            scores_train = [('trn pixelAcc', pixel_accuracy_BoostLogRegr)],
+            scores_valid = [('val pixelAcc', pixel_accuracy_BoostLogRegr)],
+            y_tensor_type = T.ftensor3,
             eval_size=self.eval_size,
+            regression = True,
             **kwargs
         )
         print "\n\n---------------------------\nCompiling LogRegr network...\n---------------------------"
@@ -169,7 +241,7 @@ class LogRegr(object):
         ''' It updates the best_classifier. The network will then fit the
         residuals wrt this classifier from now on.'''
         self.best_classifier = best_classifier
-        customBatchIterator = segmBatchIterator(
+        customBatchIterator = BatchIterator_BoostLogRegr(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
             best_classifier=self.best_classifier,
