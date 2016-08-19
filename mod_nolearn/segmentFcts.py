@@ -1,4 +1,3 @@
-import numpy as np
 import theano.tensor as T
 
 
@@ -12,12 +11,13 @@ def meanIU(prediction, GrTruth):
     Inputs:
       - prediction: shape (N, class, dimX, dimY) of float32
       - ground truth: shape (N, dimX, dimY) of int32
+
     Return averaged Intersection over union for each sample:
       - array (N)
 
     NOT WORKING, NEEDS THEANO IMPLEMENTATION
     '''
-    N, C = prediction.shape[:2] # Are not numbers, can not be used to create a numpy array
+    N, C = prediction.shape[:2]
     predLabels = T.argmax(prediction, axis=1)
 
     n_theano = T.itensor3()
@@ -37,6 +37,7 @@ def meanIU(prediction, GrTruth):
 
 def pixel_accuracy(prediction, GrTruth):
     '''
+    USED FOR A CLASSIFICATION PROBLEM (softmax pixel by pixel)
 
     Inputs:
       - prediction: shape (N, class, dimX, dimY) of float32. Should come from a sigmoid or softmax
@@ -57,7 +58,23 @@ def pixel_accuracy(prediction, GrTruth):
     n_pixels = T.cast(GrTruth.shape[1]*GrTruth.shape[2], 'float32')
     return right_pixels/n_pixels
 
+def pixel_accuracy_sigmoid(prediction, targets):
+    '''
+    USED FOR A LOGISTIC REGRESSION PROBLEM (sigmoid pixel by pixel)
+
+    Inputs:
+      - prediction: shape (N, dimX, dimY) of float32. Should come from a sigmoid
+      - ground truth: shape (N, dimX, dimY) of float32 representing GroundTruth or residuals in [0.,1.]
+
+    Return pixel accuracy [sum(right_pixels)/all_pixels] for each sample:
+      - array (N)
+
+    '''
+    right_pixels = T.sum( T.lt(T.abs_(prediction-targets), 0.5), axis=(1,2))
+    n_pixels = T.cast(targets.shape[1]*targets.shape[2], 'float32')
+    return right_pixels/n_pixels
+
+
+
 # def mean_accuracy(prediction, GrTruth):
 #     ...
-
-# def segmLoss():

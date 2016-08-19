@@ -1,14 +1,11 @@
-import numpy as np
+import theano.tensor as T
+from theano.tensor.nnet import categorical_crossentropy
+from theano.tensor.nnet import softmax
 
+from nolearn.lasagne.base import TrainSplit
 
 from mod_nolearn.nets.modNeuralNet import modNeuralNet
 from ..segmentFcts import meanIU, pixel_accuracy
-
-
-# Best accuracy??
-from theano.tensor import reshape
-
-from theano.tensor.nnet import categorical_crossentropy
 
 
 # This is computing the loss:
@@ -51,7 +48,6 @@ def categorical_crossentropy_segm(predictions, targets):
     return results.reshape((shape[0],shape[2],shape[3]))
 
 # This is the non-linearity, giving the scores:
-from theano.tensor.nnet import softmax
 def softmax_segm(x):
     """Softmax activation function
     :math:`\\varphi(\\mathbf{x})_j =
@@ -73,7 +69,27 @@ def softmax_segm(x):
     return results.reshape((shape[0],shape[2],shape[3],shape[1])).transpose((0,3,1,2))
 
 
-from nolearn.lasagne.base import TrainSplit
+# This is computing the loss:
+def binary_crossentropy_segm(predictions, targets):
+    '''
+        MODIFICATIONS:
+        - reshape targets (pixel by pixel)
+    '''
+    shape = predictions.shape
+    pred_mod = predictions.reshape((-1,))
+    targ_mod = targets.reshape((-1,))
+    results = 1./(shape[0]) * T.nnet.binary_crossentropy(pred_mod, targ_mod)
+    return results.reshape(shape)
+
+# This is the non-linearity, giving the scores:
+def sigmoid_segm(x):
+    '''
+    Adapted to pixel by pixel
+    '''
+    shape = x.shape
+    x_mod = x.reshape((-1,))
+    results = T.nnet.sigmoid(x_mod)
+    return results.reshape(shape)
 
 
 # MODULES necessary only for the last routine:

@@ -23,7 +23,7 @@ X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,
 # Set the main logRegr network:
 # -------------------------------------
 from lasagne.updates import adam
-from greedyNET.nets.logRegres import LogRegr
+from greedyNET.nets.logRegres import Boost_LogRegr
 
 logRegr_params = {
     'filter_size': 11,
@@ -35,7 +35,7 @@ logRegr_params = {
     'eval_size': 0.2
 }
 
-my_first_net = LogRegr(
+my_first_net = Boost_LogRegr(
     update=adam,
     update_learning_rate=1e-2,
     update_beta1=0.9,
@@ -60,6 +60,7 @@ from mod_nolearn.visualize import plot_conv_weights, plot_images
 fig = plot_conv_weights(my_first_net.net.layers_["convLayer"])
 fig.savefig("weights_before_boost1.pdf")
 
+print my_first_net.net.layers[0]
 my_first_net.net.fit(X_small, y_small,epochs=4)
 my_first_net.net.update_learning_rate = 1e-3
 my_first_net.net.fit(X_small, y_small,epochs=2)
