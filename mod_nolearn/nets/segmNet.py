@@ -76,32 +76,6 @@ def softmax_segm(x):
 from nolearn.lasagne.base import TrainSplit
 
 
-from sklearn.cross_validation import KFold
-from sklearn.cross_validation import StratifiedKFold
-
-def _sldict(arr, sl):
-    if isinstance(arr, dict):
-        return {k: v[sl] for k, v in arr.items()}
-    else:
-        return arr[sl]
-class ownTrainSplit(TrainSplit):
-
-    def __call__(self, X, y, net):
-        if self.eval_size:
-            if net.regression or not self.stratify:
-                kf = KFold(y.shape[0], round(1. / self.eval_size))
-            else:
-                kf = StratifiedKFold(y, round(1. / self.eval_size))
-
-            train_indices, valid_indices = next(iter(kf))
-            X_train, y_train = _sldict(X, train_indices), y[train_indices]
-            X_valid, y_valid = _sldict(X, valid_indices), y[valid_indices]
-        else:
-            X_train, y_train = X, y
-            X_valid, y_valid = _sldict(X, slice(len(y), None)), y[len(y):]
-
-        return X_train, X_valid, y_train, y_valid
-
 # MODULES necessary only for the last routine:
 import theano
 from lasagne.layers import InputLayer
@@ -119,7 +93,7 @@ class segmNeuralNet(modNeuralNet):
     '''
     def __init__(self,*args,**kwargs):
         eval_size = kwargs.pop('eval_size', 0.1)
-        kwargs['train_split'] = ownTrainSplit(eval_size=eval_size,stratify=False)
+        kwargs['train_split'] = TrainSplit(eval_size=eval_size,stratify=False)
         kwargs['objective_loss_function'] = categorical_crossentropy_segm
         kwargs['scores_train'] = [('trn pixelAcc', pixel_accuracy)]
         if eval_size!=0:

@@ -11,6 +11,7 @@ class modNeuralNet(NeuralNet):
     - Add log after some batch? Save loss! Can be useful!
     - Track distribution of weights
     - Modify verbose logs: choose how many times to print (sub or over epochs)
+    - Accept separate training_data and test_data instead of dividing one array.
 
     Modifications implemented:
      -

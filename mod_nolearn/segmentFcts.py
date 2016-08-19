@@ -41,7 +41,7 @@ def pixel_accuracy(prediction, GrTruth):
     Inputs:
       - prediction: shape (N, class, dimX, dimY) of float32. Should come from a sigmoid or softmax
       - ground truth: shape (N, dimX, dimY) of int. Classes should start from 0.
-            Actually even a tensor (N, class, dimX, dimY) can be accepted.
+            Even a tensor (N, class, dimX, dimY) can be accepted.
 
     Return pixel accuracy [sum(right_pixels)/all_pixels] for each sample:
       - array (N)

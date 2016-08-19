@@ -1,47 +1,47 @@
 import time
 import numpy as np
-
-from lasagne import layers
-
-from lasagne.layers import set_all_param_values, get_all_param_values
-import lasagne.init
+from copy import deepcopy
 
 from scipy.fftpack import dct
 
+from lasagne import layers
+from lasagne.layers import set_all_param_values, get_all_param_values
+import lasagne.init
 from mod_nolearn.nets.segmNet import segmNeuralNet, softmax_segm
+
+
 DEFAULT_imgShape = (1024,768)
 
-class UpScaleLayer(layers.Layer):
-    '''
-    --------------------------
-    Subclass of lasagne.layers.Layer:
-    --------------------------
+# class UpScaleLayer(layers.Layer):
+#     '''
+#     --------------------------
+#     Subclass of lasagne.layers.Layer:
+#     --------------------------
 
-    Upscale (if necessary) the output of the logistic regression to match the
-    dimensions of the initial image.
+#     Upscale (if necessary) the output of the logistic regression to match the
+#     dimensions of the initial image.
 
-    The algorithm used is bilinear interpolation.
-    The layer is not Trainable at this stage.
+#     The algorithm used is bilinear interpolation.
+#     The layer is not Trainable at this stage.
 
-    UNCOMPLETE: for the moment is an identity layer.
-    '''
-    def __init__(self, *args, **kwargs):
-        self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
-        super(UpScaleLayer, self).__init__(*args, **kwargs)
+#     UNCOMPLETE: for the moment is an identity layer.
+#     '''
+#     def __init__(self, *args, **kwargs):
+#         self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
+#         super(UpScaleLayer, self).__init__(*args, **kwargs)
 
-    def get_output_for(self, input, **kwargs):
-        # Use scipy.ndimage.zoom(data, (1, 2, 2)) and select bilinear
-        return input
-        # return input.sum(axis=-1)
+#     def get_output_for(self, input, **kwargs):
+#         # Use scipy.ndimage.zoom(data, (1, 2, 2)) and select bilinear
+#         return input
+#         # return input.sum(axis=-1)
 
-    def get_output_shape_for(self, input_shape):
-        return input_shape
-        # Always original dim. of image...
-        # return input_shape[:-1]
+#     def get_output_shape_for(self, input_shape):
+#         return input_shape
+#         # Always original dim. of image...
+#         # return input_shape[:-1]
 
 from nolearn.lasagne import BatchIterator
 import theano.tensor as T
-from theano.tensor import abs_
 
 class segmBatchIterator(BatchIterator):
     '''
@@ -51,13 +51,12 @@ class segmBatchIterator(BatchIterator):
     Inputs:
       - processInput (None): to apply DCT or previous fixed layers. Example of input: processInput(DCT_size=4)
       - best_classifier (None): to fit the residuals
-      - usual batch_size
+      - other usual options: batch_size, shuffle
     '''
     def __init__(self, *args, **kwargs):
         self.best_classifier = kwargs.pop('best_classifier', None)
         self.processInput = kwargs.pop('processInput', None)
         super(segmBatchIterator, self).__init__(*args, **kwargs)
-
 
     def transform(self, Xb, yb):
         # Process inputs:
@@ -69,11 +68,18 @@ class segmBatchIterator(BatchIterator):
             if Xb.ndim!=yb.ndim:
                 raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with ints [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class labels.')
 
-        # Fit on residuals:
-        if self.best_classifier:
-            pred = self.best_classifier.predict_proba(Xb) #[N,C,x,y]
-            yb = abs_(pred - yb)
-            print "Ciao"
+            # Fit on residuals:
+            if self.best_classifier:
+                pred = self.best_classifier.predict_proba(Xb) #[N,C,x,y]
+                print pred[0,:,0,0]
+                print yb[0,:,0,0]
+                yb = np.absolute(pred - yb)
+                print yb[0,:,0,0]
+                raise ValueError("Stop here")
+            else:
+                # This is not necessary in Net2 where we fit always the GrTruth
+                # because y_tensor_type can be set to T.itensor4
+                yb = yb.astype(np.float32)
 
         return Xb, yb
 
@@ -89,7 +95,7 @@ class LogRegr(object):
         - best_classifier (None): best previous classifier
         - batch_size (100)
         - eval_size (0.1): decide the cross-validation proportion. Do not use the option "train_split" of NeuralNet!
-        - DCT_size (7)
+        - DCT_size (7): if set to None the channels of the input image will be used
         - fixed_previous_layers (None): if this is set, DCT_size is ignored (and channels_image is redundant)
         - all additional parameters of NeuralNet.
           (e.g. update=adam, max_epochs, update_learning_rate, etc..)
@@ -101,6 +107,7 @@ class LogRegr(object):
         - a change in the batch_size should update the batchIterator
         - add a method to update the input-processor
         - channels_input with previous fixed layers
+        - check if shuffling in the batch is done in a decent way
     '''
     def __init__(self,**kwargs):
         self.filter_size = kwargs.pop('filter_size', 7)
@@ -119,11 +126,21 @@ class LogRegr(object):
         if self.fixed_previous_layers:
             # self.channels_input = ???
             if 'DCT_size' in kwargs:
-                raise Warning('DCT_size ignored. Use output of previous fixed layers instead.')
+                raise Warning('DCT_size ignored. Using output of previous fixed layers instead.')
         else:
             self.DCT_size = kwargs.pop('DCT_size', 7)
-            self.channels_input = self.channels_image * self.DCT_size**2
-        customBatchIterator = segmBatchIterator(batch_size=self.batch_size,best_classifier=self.best_classifier, processInput=processInput(DCT_size=self.DCT_size,fixed_layers=self.fixed_previous_layers))
+            self.channels_input = self.channels_image * self.DCT_size**2 if self.DCT_size else self.channels_image
+
+        self.batchShuffle = True
+        customBatchIterator = segmBatchIterator(
+            batch_size=self.batch_size,
+            shuffle=self.batchShuffle,
+            best_classifier=self.best_classifier,
+            processInput=processInput(
+                DCT_size=self.DCT_size,
+                fixed_layers=self.fixed_previous_layers
+            )
+        )
 
         # Layers:
         netLayers = [
@@ -138,23 +155,31 @@ class LogRegr(object):
         self.net = segmNeuralNet(layers=netLayers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
-            y_tensor_type = T.itensor4,
+            y_tensor_type = T.ftensor4,
             eval_size=self.eval_size,
             **kwargs
         )
-        print "\n\n---------------------------\nCompiling network...\n---------------------------"
+        print "\n\n---------------------------\nCompiling LogRegr network...\n---------------------------"
         tick = time.time()
         self.net.initialize()
         tock = time.time()
         print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
     def set_bestClassifier(self, best_classifier):
-        ''' Needs to be updated with right input...'''
+        ''' It updates the best_classifier. The network will then fit the
+        residuals wrt this classifier from now on.'''
         self.best_classifier = best_classifier
-        customBatchIterator = segmBatchIterator(batch_size=self.batch_size,best_classifier=self.best_classifier)
+        customBatchIterator = segmBatchIterator(
+            batch_size=self.batch_size,
+            shuffle=self.batchShuffle,
+            best_classifier=self.best_classifier,
+            processInput=processInput(
+                DCT_size=self.DCT_size,
+                fixed_layers=self.fixed_previous_layers
+            )
+        )
         self.net.batch_iterator_train = customBatchIterator
         self.net.batch_iterator_test = customBatchIterator
-
 
     def _reset_weights(self):
         W, b = get_all_param_values(self.net.layers_['convLayer'])
@@ -163,12 +188,18 @@ class LogRegr(object):
 
     def clone(self,**kwargs):
         '''
-        Accept option 'reset' for resetting the weights of the new Net
+        Options:
+            - reset (False): for resetting the weights of the new Net
+            - setClassifier (False): if set to True, the new Net will have as best_previous_classifier the previous Net
         '''
         kwargs.setdefault('reset', False)
-        newObj = self.deepcopy()
+        kwargs.setdefault('setClassifier', False)
+        newObj = deepcopy(self)
+        newObj.train_history_ = []
         if kwargs['reset']:
             newObj._reset_weights()
+        if kwargs['setClassifier']:
+            newObj.set_bestClassifier(self.net)
         return newObj
 
 
@@ -179,7 +210,7 @@ class processInput(object):
     Compute the input. The function is called each time we choose a batch of data.
 
     Arguments:
-     - DCT_size (7): size of the DCT filter, the output will have 8*8*3 filters
+     - DCT_size (7): size of the DCT filter, the output will have 7*7*3 filters. The input can be set to None and then nothing will be done.
      - fixed_layers (None): optional network representing the previous learned and fixed layers (the DCT filters should be included...?)
     '''
     def __init__(self, **kwargs):
@@ -191,8 +222,10 @@ class processInput(object):
     def __call__(self, batch_input):
         if self.fixed_layers!=None:
             batch_output = self.fixed_layers.predict_proba(batch_input)
-        else:
+        elif self.DCT_size:
             batch_output = self.apply_DCT(batch_input)
+        else:
+            batch_output = batch_input
 
         return batch_output
 
@@ -222,6 +255,20 @@ class processInput(object):
         print "Conversion: %g sec." %(tock-tick)
         return output
 
+
+# --------------------------
+# NETWORK 2:
+# --------------------------
+
+class Network2(object):
+    '''
+    This class contains the network that put together the LogRegr networks computed in a boosting procedure.
+
+    Inputs:
+        - ...
+    '''
+    def __init__(self):
+        pass
 
 
 
