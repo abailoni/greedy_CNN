@@ -18,9 +18,6 @@ class Network2(object):
 
     Inputs:
 
-
-    To solve:
-     [x] I should pass at least one Regr, to get some informations automatically (num of filters of the first ConvLayer, etc...)
     '''
     def __init__(self, logRegr1, **kwargs):
         # -------------------------------------
@@ -64,8 +61,10 @@ class Network2(object):
                 'filter_size': self.filter_size_convRegr,
                 'pad':'same',
                 'nonlinearity': segmNet.sigmoid_segm}),
-            (maskLayer,{
+            (MaskLayer,{
                 'name': 'mask',
+                'num_nodes': 5,
+                'num_classes': self.num_classes
                 }),
             (layers.Conv2DLayer, {
                 'name': 'conv2',
@@ -74,14 +73,6 @@ class Network2(object):
                 'pad':'same',
                 'nonlinearity': segmNet.sigmoid_segm}),
         ]
-
-        # Set the first layer as not trainable:
-        # ...
-
-
-        # Insert the weights of the first network:
-        # ....
-
 
         self.net = segmNet.segmNeuralNet(
             layers=netLayers,
@@ -95,6 +86,14 @@ class Network2(object):
             regression = True,
             **kwargs
         )
+
+        # Set the first layer as not trainable:
+        self.net.layers_['conv_fixedRegr'].params[self.net.layers_['conv_fixedRegr'].W].remove('trainable')
+        self.net.layers_['conv_fixedRegr'].params[self.net.layers_['conv_fixedRegr'].b].remove('trainable')
+
+        # Insert the weights of the first network:
+        self.insert_weights(logRegr1, 0)
+
         print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
         tick = time.time()
         self.net.initialize()
@@ -103,7 +102,46 @@ class Network2(object):
 
 
     def insert_weights(self, LogRegr, num_node):
-        # Insert weights
-        # ...
-        # Change mask
-        pass
+        # Update mask:
+        self.net.layers_['mask'].update_mask()
+
+        # ------------------
+        # Update weights:
+        # ------------------
+        Net2_W, Net2_b = layers.get_all_param_values(self.net.layers_['conv_fixedRegr'])
+        W, b = layers.get_all_param_values(LogRegr.net.layers_['convLayer'])
+        # Write down the shape of W and b and then it should be clear...
+        # ....
+        layers.set_all_param_values(self.net.layers_['conv_fixedRegr'], [Net2_W, Net2_b])
+
+
+class MaskLayer(layers.Layer):
+    '''
+    --------------------------
+    Subclass of lasagne.layers.Layer:
+    --------------------------
+
+    The received input should be in the form: (N, num_classes*num_nodes, dim_x, dim_y)
+
+    Inputs:
+     - num_nodes (5)
+     - num_classes (1)
+
+    '''
+    def __init__(self, *args, **kwargs):
+        self.num_nodes = kwargs.pop('num_nodes', 5)
+        self.num_classes = kwargs.pop('num_classes', 1)
+        self.active_nodes = 0
+        super(MaskLayer, self).__init__(*args, **kwargs)
+
+    def update_mask(self):
+        self.active_nodes += 1
+
+    def get_output_for(self, input, **kwargs):
+        actNods, nClas = self.active_nodes, self.num_classes
+        zero_indices = slice(actNods*nClas,nClas*self.num_nodes)
+        return T.set_subtensor(input[:,zero_indices,:,:], 0.)
+
+
+
+
