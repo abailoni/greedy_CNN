@@ -20,6 +20,13 @@ X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,
 
 
 # -------------------------------------
+# Import pretrained VGG16:
+# -------------------------------------
+from pretr_nets.vgg16 import import_pretr_vgg16_layers
+vgg16_eval_fun, _ = import_pretr_vgg16_layers()
+
+
+# -------------------------------------
 # Set the main logRegr network:
 # -------------------------------------
 from lasagne.updates import adam
@@ -29,14 +36,14 @@ import greedyNET.nets.net2 as net2
 logRegr_params = {
     'filter_size': 11,
     'imgShape': X_small.shape[-2:],
-    'xy_input': X_small.shape[-2:],
-    'channels_image': 3,
-    'DCT_size': None,
+    # 'xy_input': X_small.shape[-2:],
+    # 'channels_image': 3,
     'batch_size': 100,
     'eval_size': 0.2
 }
 
 my_first_net = logRegr.Boost_LogRegr(
+    vgg16_eval_fun,
     update=adam,
     update_learning_rate=1e-2,
     update_beta1=0.9,

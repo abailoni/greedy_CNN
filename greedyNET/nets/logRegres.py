@@ -76,19 +76,21 @@ class BatchIterator_BoostLogRegr(greedy_utils.BatchIterator_Greedy):
 
 class Boost_LogRegr(object):
     '''
-    Inputs:
+    Options and inputs:
+        - processInput (Required): istance of the class greedy_utils.processInput.
         - filter_size (7): requires an odd size to keep the same output dimension
+        - best_classifier (None): best previous classifier
+        - batch_size (100)
+        - batchShuffle (True)
+        - eval_size (0.1): decide the cross-validation proportion. Do not use the option "train_split" of NeuralNet!
+        - xy_input (None, None): use only for better optimization. But then use the cloning process at your own risk.
+        - all additional parameters of NeuralNet.
+          (e.g. update=adam, max_epochs, update_learning_rate, etc..)
+
+    Deprecated:
         - [num_classes now fixed to 2, that means one filter...]
         - imgShape (1024,768): used for the final residuals
         - channels_image (3): channels of the original image
-        - xy_input (None, None): if not set then the network can be reused for different inputs
-        - best_classifier (None): best previous classifier
-        - batch_size (100)
-        - eval_size (0.1): decide the cross-validation proportion. Do not use the option "train_split" of NeuralNet!
-        - DCT_size (None): if set to None the channels of the input image will be used
-        - fixed_previous_layers (None): if this is set, DCT_size is ignored (and channels_image is redundant)
-        - all additional parameters of NeuralNet.
-          (e.g. update=adam, max_epochs, update_learning_rate, etc..)
 
     IMPORTANT REMARK: (valid only for Classification, not LogRegres...)
     in order to implement a boosting classification, the fit function as targets y should get a matrix with floats [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class numbers.
@@ -99,32 +101,29 @@ class Boost_LogRegr(object):
         - channels_input with previous fixed layers
         - check if shuffling in the batch is done in a decent way
     '''
-    def __init__(self,**kwargs):
+    def __init__(self,processInput,**kwargs):
+        # -----------------
+        # Own attributes:
+        # -----------------
         self.filter_size = kwargs.pop('filter_size', 7)
         self.num_classes = 1
         if "num_classes" in kwargs:
             raise Warning('No idea how to implement a classification boosting for the moment. "num_classes" parameter is fixed to 2')
         self.batch_size = kwargs.pop('batch_size', 100)
-        self.channels_image = kwargs.pop('channels_image', 3)
         self.xy_input = kwargs.pop('xy_input', (None, None))
-        self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
         self.best_classifier = kwargs.pop('best_classifier', False)
         self.eval_size = kwargs.pop('eval_size', 0.1)
         if "train_split" in kwargs:
             raise ValueError('The option train_split is not used. Use eval_size instead.')
+        # self.channels_image = kwargs.pop('channels_image', 3)
+        # self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
 
+
+        # -----------------
         # Input processing:
-        self.fixed_previous_layers = kwargs.pop('fixed_previous_layers', None)
-        self.DCT_size = kwargs.pop('DCT_size', None)
-        if self.fixed_previous_layers:
-            if 'DCT_size':
-                raise Warning('DCT_size ignored. Using output of previous fixed layers instead.')
-
+        # -----------------
         self.batchShuffle = kwargs.pop('batchShuffle', True)
-        self.processInput = greedy_utils.processInput(
-                DCT_size=self.DCT_size,
-                fixed_layers=self.fixed_previous_layers
-            )
+        self.processInput = processInput
         customBatchIterator = BatchIterator_BoostLogRegr(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
@@ -132,7 +131,9 @@ class Boost_LogRegr(object):
             processInput=self.processInput
         )
 
-        # Layers:
+        # -----------------
+        # Building the NET:
+        # -----------------
         netLayers = [
             # layer dealing with the input data
             (layers.InputLayer, {'shape': (None, self.processInput.output_channels, self.xy_input[0], self.xy_input[1])}),
@@ -192,6 +193,8 @@ class Boost_LogRegr(object):
 
         Return the cloned object.
         '''
+        if self.xy_input is not (None, None):
+            raise Warning("Cloning with xy-image-inputs already set...")
         kwargs.setdefault('reset', False)
         kwargs.setdefault('setClassifier', False)
         newObj = deepcopy(self)

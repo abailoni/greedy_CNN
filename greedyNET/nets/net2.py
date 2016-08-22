@@ -3,9 +3,12 @@
 # --------------------------
 import time
 import numpy as np
+from copy import deepcopy
 
 import theano.tensor as T
 from lasagne import layers
+from lasagne.layers import set_all_param_values, get_all_param_values
+import lasagne.init
 
 
 import greedyNET.greedy_utils as greedy_utils
@@ -35,15 +38,15 @@ class Network2(object):
         # Inherited parameters from logRegr1:
         # -------------------------------------
         self.num_classes = logRegr1.num_classes
-        self.channels_image = logRegr1.channels_image
         self.xy_input = logRegr1.xy_input
-        self.imgShape = logRegr1.imgShape
         self.eval_size = logRegr1.eval_size
         self.filter_size_convRegr = logRegr1.filter_size
         # Input processing:
-        self.fixed_previous_layers = logRegr1.fixed_previous_layers
-        self.DCT_size = logRegr1.DCT_size
         self.processInput = logRegr1.processInput
+        # self.fixed_previous_layers = logRegr1.fixed_previous_layers
+        # self.channels_image = logRegr1.channels_image
+        # self.DCT_size = logRegr1.DCT_size
+        # self.imgShape = logRegr1.imgShape
 
         # -------------------------------------
         # Specific parameters:
@@ -135,6 +138,33 @@ class Network2(object):
         Net2_b[num_node*nClas:(num_node+1)*nClas] = b
         layers.set_all_param_values(self.net.layers_['conv_fixedRegr'], [Net2_W, Net2_b])
 
+    def clone(self,**kwargs):
+        '''
+        Options:
+            - reset (True): for resetting the weights of the new Net
+
+        Return the cloned object.
+        '''
+        if self.xy_input is not (None, None):
+            raise Warning("Cloning with xy-image-inputs already set...")
+        kwargs.setdefault('reset', True)
+        kwargs.setdefault('setClassifier', False)
+        newObj = deepcopy(self)
+        if kwargs['reset']:
+            # Reset some stuff:
+            if newObj.net.verbose:
+                # newObj.net.on_epoch_finished.append(PrintLog())
+                pass
+            newObj.net.train_history_[:] = []
+            newObj._reset_weights()
+        return newObj
+
+    def _reset_weights(self):
+        W_regr, b_regr, mask, W_conv2, b_conv2 = get_all_param_values(self.net.layers_['conv2'])
+        glorot, constant = lasagne.init.GlorotNormal(), lasagne.init.Constant()
+        new_weights = [glorot.sample(W_regr.shape), constant.sample(b_regr.shape), mask, glorot.sample(W_conv2.shape), constant.sample(b_conv2.shape)]
+        set_all_param_values(self.net.layers_['convLayer'], new_weights)
+        self.net.layers_['mask'].active_nodes = 0
 
 class MaskLayer(layers.Layer):
     '''
