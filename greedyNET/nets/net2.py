@@ -2,6 +2,7 @@
 # NETWORK 2:
 # --------------------------
 import time
+import numpy as np
 
 import theano.tensor as T
 from lasagne import layers
@@ -16,8 +17,18 @@ class Network2(object):
     '''
     This class contains the network that put together the LogRegr networks computed in the boosting procedure.
 
-    Inputs:
+    Inputs and options:
+        - instance of class Boost_LogRegr (mandatory): the first trained node. Many parameters of Net2 are inherited by this network
+        - batch_size (100)
+        - batchShuffle (True)
+        - filter_size (7): the dimension of the filter of the second convolutional level
+        - num_nodes (5): number of nodes trained in a boosting matter
+        - usual NeuralNet parameters (update, learning_rate...)
 
+    Names of the layers:
+        - conv_fixedRegr
+        - mask
+        - conv2
     '''
     def __init__(self, logRegr1, **kwargs):
         # -------------------------------------
@@ -28,7 +39,7 @@ class Network2(object):
         self.xy_input = logRegr1.xy_input
         self.imgShape = logRegr1.imgShape
         self.eval_size = logRegr1.eval_size
-        self.filter_size_convRegr = logRegr1.net.filter_size
+        self.filter_size_convRegr = logRegr1.filter_size
         # Input processing:
         self.fixed_previous_layers = logRegr1.fixed_previous_layers
         self.DCT_size = logRegr1.DCT_size
@@ -88,11 +99,9 @@ class Network2(object):
         )
 
         # Set the first layer as not trainable:
+        self.net._output_layer = self.net.initialize_layers()
         self.net.layers_['conv_fixedRegr'].params[self.net.layers_['conv_fixedRegr'].W].remove('trainable')
         self.net.layers_['conv_fixedRegr'].params[self.net.layers_['conv_fixedRegr'].b].remove('trainable')
-
-        # Insert the weights of the first network:
-        self.insert_weights(logRegr1, 0)
 
         print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
         tick = time.time()
@@ -101,17 +110,29 @@ class Network2(object):
         print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
 
-    def insert_weights(self, LogRegr, num_node):
+        # Insert the weights of the first network:
+        self.insert_weights(logRegr1)
+
+
+    def insert_weights(self, LogRegr):
+        '''
+        Structure of parameters:
+         - W: (num_filters, num_inputs, filter_length)
+         - b: (num_filters, )
+
+        '''
         # Update mask:
         self.net.layers_['mask'].update_mask()
+        num_node = self.net.layers_['mask'].active_nodes
 
         # ------------------
         # Update weights:
         # ------------------
+        nClas = self.num_classes
         Net2_W, Net2_b = layers.get_all_param_values(self.net.layers_['conv_fixedRegr'])
         W, b = layers.get_all_param_values(LogRegr.net.layers_['convLayer'])
-        # Write down the shape of W and b and then it should be clear...
-        # ....
+        Net2_W[num_node*nClas:(num_node+1)*nClas,:,:] = W
+        Net2_b[num_node*nClas:(num_node+1)*nClas] = b
         layers.set_all_param_values(self.net.layers_['conv_fixedRegr'], [Net2_W, Net2_b])
 
 
@@ -128,19 +149,29 @@ class MaskLayer(layers.Layer):
      - num_classes (1)
 
     '''
-    def __init__(self, *args, **kwargs):
+    # def __init__(self, incoming, num_units, W=lasagne.init.Normal(0.01), **kwargs):
+    #     super(DotLayer, self).__init__(incoming, **kwargs)
+    #     num_inputs = self.input_shape[1]
+    #     self.num_units = num_units
+    #     self.W = self.add_param(W, (num_inputs, num_units), name='W')
+
+    def __init__(self, incoming, *args, **kwargs):
         self.num_nodes = kwargs.pop('num_nodes', 5)
         self.num_classes = kwargs.pop('num_classes', 1)
+        super(MaskLayer, self).__init__(incoming, *args, **kwargs)
         self.active_nodes = 0
-        super(MaskLayer, self).__init__(*args, **kwargs)
+        # For the moment, an array such that:
+        #   - the first element is actNods*nClas
+        #   - the second is nClas*self.num_nodes
+        self.active_nodes_slice = self.add_param(np.ones(2, dtype=np.int8), (2,), name='active_nodes_slice', trainable=False, regularizable=False)
 
     def update_mask(self):
         self.active_nodes += 1
+        actNods, nClas = self.active_nodes, self.num_classes
+        self.active_nodes_slice.set_value([actNods*nClas,nClas*self.num_nodes])
 
     def get_output_for(self, input, **kwargs):
-        actNods, nClas = self.active_nodes, self.num_classes
-        zero_indices = slice(actNods*nClas,nClas*self.num_nodes)
-        return T.set_subtensor(input[:,zero_indices,:,:], 0.)
+        return T.set_subtensor(input[:,self.active_nodes_slice[0]:self.active_nodes_slice[1],:,:], 0.)
 
 
 

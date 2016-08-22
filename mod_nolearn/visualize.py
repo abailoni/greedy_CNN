@@ -15,7 +15,7 @@ def plot_loss(net, name_file="loss.pdf"):
 from itertools import product
 import numpy as np
 
-def plot_conv_weights(layer, figsize=(6, 6)):
+def plot_conv_weights_mod(layer, figsize=(6, 6)):
     """Plot the weights of a specific layer.
     Only really makes sense with convolutional layers.
     Parameters

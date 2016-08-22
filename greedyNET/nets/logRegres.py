@@ -6,6 +6,7 @@ from lasagne import layers
 from lasagne.layers import set_all_param_values, get_all_param_values
 import lasagne.init
 import theano.tensor as T
+from nolearn.lasagne import PrintLog
 
 import mod_nolearn.nets.segmNet as segmNet
 import greedyNET.greedy_utils as greedy_utils
@@ -26,6 +27,8 @@ DEFAULT_imgShape = (1024,768)
 #     The layer is not Trainable at this stage.
 
 #     UNCOMPLETE: for the moment is an identity layer.
+#
+#     WRONG IMPLEMENTATION init(). Check MaskLayer...
 #     '''
 #     def __init__(self, *args, **kwargs):
 #         self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
@@ -66,7 +69,7 @@ class BatchIterator_BoostLogRegr(greedy_utils.BatchIterator_Greedy):
             # Fit on residuals:
             yb = yb.astype(np.float32)
             if self.best_classifier:
-                pred = self.best_classifier.predict_proba(Xb) #[N,x,y]
+                pred = self.best_classifier.predict_proba(Xb).squeeze() #[N,x,y]
                 yb = np.absolute(pred - yb)
         return Xb, yb
 
@@ -186,12 +189,18 @@ class Boost_LogRegr(object):
         Options:
             - reset (False): for resetting the weights of the new Net
             - setClassifier (False): if set to True, the new Net will have as best_previous_classifier the previous Net
+
+        Return the cloned object.
         '''
         kwargs.setdefault('reset', False)
         kwargs.setdefault('setClassifier', False)
         newObj = deepcopy(self)
-        newObj.train_history_ = []
         if kwargs['reset']:
+            # Reset some stuff:
+            if newObj.net.verbose:
+                # newObj.net.on_epoch_finished.append(PrintLog())
+                pass
+            newObj.net.train_history_[:] = []
             newObj._reset_weights()
         if kwargs['setClassifier']:
             newObj.set_bestClassifier(self.net)
