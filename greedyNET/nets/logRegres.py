@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from copy import deepcopy
+from copy import deepcopy, copy
 
 from lasagne import layers
 from lasagne.layers import set_all_param_values, get_all_param_values
@@ -60,8 +60,6 @@ class BatchIterator_BoostLogRegr(greedy_utils.BatchIterator_Greedy):
         super(BatchIterator_BoostLogRegr, self).__init__(*args, **kwargs)
 
     def transform(self, Xb, yb):
-        Xb, yb = super(BatchIterator_BoostLogRegr, self).transform(Xb, yb)
-
         if yb is not None:
             # if Xb.ndim!=yb.ndim:
             #     raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with ints [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class labels.')
@@ -71,6 +69,8 @@ class BatchIterator_BoostLogRegr(greedy_utils.BatchIterator_Greedy):
             if self.best_classifier:
                 pred = self.best_classifier.predict_proba(Xb).squeeze() #[N,x,y]
                 yb = np.absolute(pred - yb)
+
+        Xb, yb = super(BatchIterator_BoostLogRegr, self).transform(Xb, yb)
         return Xb, yb
 
 
@@ -101,11 +101,12 @@ class Boost_LogRegr(object):
         - channels_input with previous fixed layers
         - check if shuffling in the batch is done in a decent way
     '''
-    def __init__(self,processInput,**kwargs):
+    def __init__(self,previous_layers,input_filters,**kwargs):
         # -----------------
         # Own attributes:
         # -----------------
         self.filter_size = kwargs.pop('filter_size', 7)
+        self.input_filters = input_filters
         self.num_classes = 1
         if "num_classes" in kwargs:
             raise Warning('No idea how to implement a classification boosting for the moment. "num_classes" parameter is fixed to 2')
@@ -123,12 +124,12 @@ class Boost_LogRegr(object):
         # Input processing:
         # -----------------
         self.batchShuffle = kwargs.pop('batchShuffle', True)
-        self.processInput = processInput
+        self.previous_layers = previous_layers
         customBatchIterator = BatchIterator_BoostLogRegr(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
             best_classifier=self.best_classifier,
-            processInput=self.processInput
+            previous_layers=self.previous_layers
         )
 
         # -----------------
@@ -136,7 +137,7 @@ class Boost_LogRegr(object):
         # -----------------
         netLayers = [
             # layer dealing with the input data
-            (layers.InputLayer, {'shape': (None, self.processInput.output_channels, self.xy_input[0], self.xy_input[1])}),
+            (layers.InputLayer, {'shape': (None, input_filters, self.xy_input[0], self.xy_input[1])}),
             # first stage of our convolutional layers
             (layers.Conv2DLayer, {
                 'name': 'convLayer',
@@ -175,7 +176,7 @@ class Boost_LogRegr(object):
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
             best_classifier=self.best_classifier,
-            processInput=self.processInput
+            previous_layers=self.previous_layers
         )
         self.net.batch_iterator_train = customBatchIterator
         self.net.batch_iterator_test = customBatchIterator
@@ -191,13 +192,15 @@ class Boost_LogRegr(object):
             - reset (False): for resetting the weights of the new Net
             - setClassifier (False): if set to True, the new Net will have as best_previous_classifier the previous Net
 
+        IT DOESN'T HAVE ANY SENSE... CHANGE TO JUST DELETE THE WEIGHTS...
+
         Return the cloned object.
         '''
-        if self.xy_input is not (None, None):
-            raise Warning("Cloning with xy-image-inputs already set...")
+        # if self.xy_input is not (None, None):
+        #     raise Warning("Cloning with xy-image-inputs already set...")
         kwargs.setdefault('reset', False)
         kwargs.setdefault('setClassifier', False)
-        newObj = deepcopy(self)
+        newObj = copy(self)
         if kwargs['reset']:
             # Reset some stuff:
             if newObj.net.verbose:

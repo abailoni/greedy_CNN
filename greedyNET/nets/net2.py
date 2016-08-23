@@ -38,11 +38,12 @@ class Network2(object):
         # Inherited parameters from logRegr1:
         # -------------------------------------
         self.num_classes = logRegr1.num_classes
+        self.input_filters = logRegr1.input_filters
         self.xy_input = logRegr1.xy_input
         self.eval_size = logRegr1.eval_size
         self.filter_size_convRegr = logRegr1.filter_size
         # Input processing:
-        self.processInput = logRegr1.processInput
+        self.previous_layers = logRegr1.previous_layers
         # self.fixed_previous_layers = logRegr1.fixed_previous_layers
         # self.channels_image = logRegr1.channels_image
         # self.DCT_size = logRegr1.DCT_size
@@ -59,7 +60,7 @@ class Network2(object):
         customBatchIterator = greedy_utils.BatchIterator_Greedy(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
-            processInput=self.processInput
+            previous_layers=self.previous_layers
         )
 
         # -------------------------------------
@@ -68,7 +69,7 @@ class Network2(object):
         netLayers = [
             # layer dealing with the input data
             (layers.InputLayer, {
-                'shape': (None, self.processInput.output_channels, self.xy_input[0], self.xy_input[1])}),
+                'shape': (None, self.input_filters, self.xy_input[0], self.xy_input[1])}),
             (layers.Conv2DLayer, {
                 'name': 'conv_fixedRegr',
                 'num_filters': self.num_classes*self.num_nodes,
@@ -115,6 +116,7 @@ class Network2(object):
 
         # Insert the weights of the first network:
         self.insert_weights(logRegr1)
+        self.active_nodes = 1
 
 
     def insert_weights(self, LogRegr):
@@ -127,6 +129,7 @@ class Network2(object):
         # Update mask:
         self.net.layers_['mask'].update_mask()
         num_node = self.net.layers_['mask'].active_nodes
+        self.active_nodes = num_node
 
         # ------------------
         # Update weights:
@@ -165,6 +168,7 @@ class Network2(object):
         new_weights = [glorot.sample(W_regr.shape), constant.sample(b_regr.shape), mask, glorot.sample(W_conv2.shape), constant.sample(b_conv2.shape)]
         set_all_param_values(self.net.layers_['convLayer'], new_weights)
         self.net.layers_['mask'].active_nodes = 0
+        self.active_nodes = 0
 
 class MaskLayer(layers.Layer):
     '''

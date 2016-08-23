@@ -64,32 +64,31 @@ def build_model(input_var, data_size=(None, 3, None, None)):
 
 def import_model():
     print "Importing pretrained net..."
-    model = pickle.load(open('/mnt/localdata01/abailoni/pretrained/vgg16.pkl'))
-    print "Done!"
+    model = pickle.load(open('/mnt/data2/abailoni/pretrained/vgg16.pkl'))
     return model
 
 
-def import_pretr_vgg16_layers():
-    '''
-    Should be generalized for a general number of kept layers...
-    '''
-    model = import_model()
-    # CLASSES = model['synset words']
-    # MEAN_IMAGE = model['mean image']
+# def import_pretr_vgg16_layers():
+#     '''
+#     Should be generalized for a general number of kept layers...
+#     '''
+#     model = import_model()
+#     # CLASSES = model['synset words']
+#     # MEAN_IMAGE = model['mean image']
 
-    input_var = T.tensor4('input')
-    net = build_model(input_var)
-    output_layer = net['conv2_2']
+#     input_var = T.tensor4('input')
+#     net = build_model(input_var)
+#     output_layer = net['conv2_2']
 
-    print "Loading pretrained weights..."
-    set_all_param_values(output_layer, model['param values'][:8])
-    print "Done!"
+#     print "Loading pretrained weights..."
+#     set_all_param_values(output_layer, model['param values'][:8])
+#     print "Done!"
 
-    prediction = get_output(output_layer, deterministic=True)
-    eval_fun_vgg16 = function([input_var], prediction, name='eval_fun_vgg16')
-    print "Compiled!"
+#     prediction = get_output(output_layer, deterministic=True)
+#     eval_fun_vgg16 = function([input_var], prediction, name='eval_fun_vgg16')
+#     print "Compiled!"
 
-    return eval_fun_vgg16, output_layer
+#     return eval_fun_vgg16, output_layer
 
 
 def nolearn_vgg16_layers(data_size=(None, 3, None, None)):
@@ -132,8 +131,9 @@ def nolearn_vgg16_layers(data_size=(None, 3, None, None)):
     return layers
 
 
-def nolearn_insert_weights_vgg16(net):
+def nolearn_insert_weights_vgg16(net, num_vgg_layers):
     model = import_model()
-    set_all_param_values(net.layers_['conv2_2'], model['param values'][:8])
+    layer_name = nolearn_vgg16_layers()[num_vgg_layers][1]['name']
+    set_all_param_values(net.layers_[layer_name], model['param values'][:num_vgg_layers*2])
     return net
 

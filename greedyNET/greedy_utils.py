@@ -2,21 +2,23 @@ from nolearn.lasagne import BatchIterator
 
 class BatchIterator_Greedy(BatchIterator):
     '''
-    It modifies the inputs using the processInput() class.
+    It modifies the inputs using the previous_layers() class.
 
     Inputs:
-      - processInput (None): to apply DCT or previous fixed layers. Example of input: processInput(DCT_size=4)
+      - previous_layers (None): to apply DCT or previous fixed layers. Example of input: previous_layers(DCT_size=4)
       - other usual options: batch_size, shuffle
+
+    UPDATE!!! The input should be mandatory!!!!!
     '''
 
     def __init__(self, *args, **kwargs):
-        self.processInput = kwargs.pop('processInput', None)
+        self.previous_layers = kwargs.pop('previous_layers', None)
         super(BatchIterator_Greedy, self).__init__(*args, **kwargs)
 
     def transform(self, Xb, yb):
         # Process inputs:
-        if self.processInput:
-            Xb = self.processInput(Xb)
+        if self.previous_layers:
+            Xb = self.previous_layers.predict_proba(Xb)
 
         return Xb, yb
 
@@ -25,6 +27,8 @@ class BatchIterator_Greedy(BatchIterator):
 
 class processInput(object):
     '''
+    --- DEPRECATED ---
+
     Compute the input. The function is called each time we choose a batch of data.
 
     It should have an attribute with the dimensions of the output! (not much the spatial ones, but the number of channels..)
