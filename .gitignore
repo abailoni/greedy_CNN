@@ -3,3 +3,5 @@
 *.pyc
 .env/*
 *.DS_store
+*.pickle
+*.txt

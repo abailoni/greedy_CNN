@@ -23,6 +23,8 @@ X, y, y_mod = data_X[:used_data], data_y[:used_data], data_y_mod[:used_data]
 CROP = 100
 X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,:CROP,:CROP]
 
+
+
 # ------ # ------ # ------- # ------- #
 #        MAIN GREEDY ROUTINE:         #
 # ------ # ------ # ------- # ------- #

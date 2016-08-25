@@ -1,6 +1,7 @@
 import time
 from copy import deepcopy, copy
 
+import matplotlib.pyplot as plt
 
 import theano.tensor as T
 import lasagne.layers as layers
@@ -84,6 +85,7 @@ class greedyRoutine(object):
             )
             self.logRegr.net = fit_routine_LogRegr(self.logRegr.net)
             self.best_classifier = copy(self.logRegr.net)
+
 
             # -----------------------------------------
             # Initialize Net2:

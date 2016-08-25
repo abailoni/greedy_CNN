@@ -15,12 +15,19 @@ from greedyNET.data_utils import get_cityscapes_data
 # Load the (preprocessed) CIFAR10 data.
 data_X, data_y, data_y_mod = get_cityscapes_data()
 
-used_data = -1
+used_data = 200
 X, y, y_mod = data_X[:used_data], data_y[:used_data], data_y_mod[:used_data]
 
 # Mini-images, just for test:
-CROP = -1
+CROP = 100
 X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,:CROP,:CROP]
+
+# Plot some images:
+from mod_nolearn.visualize import plot_images
+fig = plot_images(X[:4])
+fig.savefig("images_or.pdf")
+
+# raise Warning("Stop here!")
 
 # ------ # ------ # ------- # ------- #
 #        MAIN GREEDY ROUTINE:         #
@@ -47,18 +54,25 @@ greedy_routine = greedyRoutine(
 # Nets params:
 # -----------------------------------------
 logRegr_params = {
+    'log_filename': 'prova_log.txt',
+    # 'numIter_subLog': 2,
+    # 'subLog_filename': 'prova_subLog.txt',
+    'pickleModel_mode': 'on_epoch_finished',
+    'pickle_filename': 'prova.pickle',
+    'livePlot': True,
     'filter_size': 11,
     # 'imgShape': X_small.shape[-2:],
     # 'xy_input': X_small.shape[-2:],
     # 'channels_image': 3,
-    'batch_size': 50,
+    'batch_size': 40,
     'eval_size': eval_size
 }
 net2_params = {
     'filter_size': 11,
-    'batch_size': 50,
+    'batch_size': 40,
     'batchShuffle': True,
 }
+
 
 # --------------------------
 # Nets fitting routines:

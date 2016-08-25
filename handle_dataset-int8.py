@@ -37,10 +37,10 @@ print(np.shape(inputs_train_y))
 
 
 output_dir = '/mnt/data2/abailoni/HDF5/'
-F = h5py.File(output_dir+"cityscapes_train_trials.hdf5", "w")
+F = h5py.File(output_dir+"cityscapes_train_uint8.hdf5", "w")
 
 train_x = F.create_dataset("train_x_dset", (2975,3,CROP_SIZE[0], CROP_SIZE[1]),
-dtype='float32')
+dtype='uint8')
 train_y = F.create_dataset("train_y_dset", (2975,CROP_SIZE[0], CROP_SIZE[1]), dtype='uint8')
 
 # num_channels = 19
@@ -67,13 +67,13 @@ for i in range(len(inputs_train_x)):
 
    img = np.transpose(img,(2,0,1))
 
-   mean_train = np.reshape([[[ 73.15835921 , 82.90891754, 72.39239876]]],(3,1,1))
-   var_train = np.reshape([[[ 2237.79144756,  2326.24575092, 2256.68620499]]],(3,1,1))
+   # mean_train = np.reshape([[[ 73.15835921 , 82.90891754, 72.39239876]]],(3,1,1))
+   # var_train = np.reshape([[[ 2237.79144756,  2326.24575092, 2256.68620499]]],(3,1,1))
 
-   img = np.subtract(img,mean_train)
-   img = np.divide(img ,np.sqrt(var_train))
+   # img = np.subtract(img,mean_train)
+   # img = np.divide(img ,np.sqrt(var_train))
 
-   img = img / 255.
+   # img = img / 255.
    train_x[i,:,:,:] = img
 
    target = np.array(target)
