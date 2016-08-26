@@ -72,7 +72,7 @@ def pixel_accuracy_sigmoid(prediction, targets):
     '''
     right_pixels = T.sum( T.lt(T.abs_(prediction-targets), 0.5), axis=(1,2,3))
     n_pixels = T.cast(targets.shape[1]*targets.shape[2], 'float32')
-    return right_pixels/n_pixels
+    return T.mean(right_pixels/n_pixels)
 
 
 

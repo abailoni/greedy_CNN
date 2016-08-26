@@ -78,8 +78,9 @@ def binary_crossentropy_segm(predictions, targets):
     shape = predictions.shape
     pred_mod = T.reshape(predictions,(-1,))
     targ_mod = targets.reshape((-1,))
-    results = 1./(shape[0]) * T.nnet.binary_crossentropy(pred_mod, targ_mod)
-    return results.reshape(shape)
+    results = 1. * T.nnet.binary_crossentropy(pred_mod, targ_mod)
+    results.reshape(shape).sum(axis=(1,2))
+    return results
 
 # This is the non-linearity, giving the scores:
 def sigmoid_segm(x):

@@ -14,6 +14,10 @@ import mod_nolearn.nets.segmNet as segmNet
 import mod_nolearn.segmentFcts as segmentFcts
 import greedyNET.nets.logRegres as logRegr_routine
 import greedyNET.nets.net2 as net2_routine
+from greedyNET.greedy_utils import clean_kwargs
+import mod_nolearn.utils as utils
+
+BASE_PATH_LOG = "./logs/"
 
 
 class greedyRoutine(object):
@@ -35,6 +39,7 @@ class greedyRoutine(object):
         self.num_layers = 0
         self.num_VGG16_layers = int(num_VGG16_layers)
         self.eval_size =  kwargs.pop('eval_size',0.)
+        self.model_name = kwargs.pop('model_name', 'greedyNET')
         self.layers = vgg16.nolearn_vgg16_layers()[:self.num_VGG16_layers+1]
         fixed_kwargs = {
             'objective_loss_function': segmNet.binary_crossentropy_segm,
@@ -52,12 +57,12 @@ class greedyRoutine(object):
             **self.net_kwargs
         )
 
-        print "\n\n---------------------------"
-        print "Compiling inputProcess...\n---------------------------"
-        tick = time.time()
+        # print "\n\n---------------------------"
+        # print "Compiling inputProcess...\n---------------------------"
+        # tick = time.time()
         self.net.initialize()
-        tock = time.time()
-        print "Done! (%f sec.)\n\n\n" %(tock-tick)
+        # tock = time.time()
+        # print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
 
         # --------------------
@@ -68,8 +73,12 @@ class greedyRoutine(object):
         self.output_channels = self.net.layers[-1][1]['num_filters']
         self.last_layer_name = self.net.layers[-1][1]['name']
 
+        self.logRegr, self.conv = {}, {}
+
+
     def train_new_layer(self, (fit_routine_LogRegr, num_LogRegr, kwargs_logRegr) , (fit_routine_net2, num_net2, kwargs_net2)):
 
+        BASE_PATH_LOG_MODEL = BASE_PATH_LOG+self.model_name+'/'
         # ------------------------------------------------
         # Parallelized loop: (not working for the moment)
         # ------------------------------------------------
@@ -78,22 +87,38 @@ class greedyRoutine(object):
             # -----------------------------------------
             # Fit first LogRegr:
             # -----------------------------------------
-            self.logRegr = logRegr_routine.Boost_LogRegr(
+
+
+            net_name = "L%dG%dN0/" %(self.num_layers,idx_net2)
+            logs_path = BASE_PATH_LOG_MODEL+"logRegr"+net_name
+            utils.create_dir(logs_path)
+            params_logRegr = copy(kwargs_logRegr)
+            params_logRegr['log_filename'] = logs_path+'log.txt'
+            params_logRegr['pickleModel_mode'] = 'on_epoch_finished'
+            params_logRegr['pickle_filename'] = logs_path+'model.pickle'
+            self.logRegr[net_name] = logRegr_routine.Boost_LogRegr(
                 self.net,
                 self.output_channels,
-                **kwargs_logRegr
+                **params_logRegr
             )
-            self.logRegr.net = fit_routine_LogRegr(self.logRegr.net)
+            self.logRegr[net_name].net = fit_routine_LogRegr(self.logRegr[net_name].net)
             self.best_classifier = copy(self.logRegr.net)
 
+            return None
 
             # -----------------------------------------
             # Initialize Net2:
             # -----------------------------------------
+            logs_path = BASE_PATH_LOG_MODEL+"conv_L%d_G%d/"%(self.num_layers,idx_net2)
+            utils.create_dir(logs_path)
+            params_net2 = copy(kwargs_net2)
+            params_net2['log_filename'] = logs_path+'log.txt'
+            params_net2['pickleModel_mode'] = 'on_training_finished'
+            params_net2['pickle_filename'] = logs_path+'model.pickle'
             self.conv = net2_routine.Network2(
                 self.logRegr,
                 num_nodes=num_LogRegr,
-                **kwargs_net2
+                **params_net2
             )
 
             # -----------------------------------------
@@ -103,10 +128,15 @@ class greedyRoutine(object):
                 # Fit new logRegr to residuals:
                 if num_node==1:
                     # Avoid deep_copy for best_classifier:
+                    params_logRegr = copy(kwargs_logRegr)
+                    logs_path = BASE_PATH_LOG_MODEL+"logRegr_L%d_G%d_N%d/" %(self.num_layers,idx_net2,num_node)
+                    utils.create_dir(logs_path)
+                    params_logRegr['log_filename'] = logs_path+'log.txt'
+                    params_logRegr['pickle_filename'] = logs_path+'model.pickle'
                     self.logRegr = logRegr_routine.Boost_LogRegr(
                         self.net,
                         self.output_channels,
-                        **kwargs_logRegr
+                        **params_logRegr
                     )
                 else:
                     self.logRegr = self.logRegr.clone(reset=True)

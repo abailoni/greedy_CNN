@@ -1,5 +1,13 @@
 from nolearn.lasagne import BatchIterator
 
+def clean_kwargs(kwargs):
+    for key in ['on_epoch_finished', 'on_training_finished', 'on_batch_finished']:
+        kwargs[key] = []
+    return kwargs
+
+
+
+
 class BatchIterator_Greedy(BatchIterator):
     '''
     It modifies the inputs using the previous_layers() class.

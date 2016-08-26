@@ -160,11 +160,11 @@ class Boost_LogRegr(object):
             regression = True,
             **kwargs
         )
-        print "\n\n---------------------------\nCompiling LogRegr network...\n---------------------------"
-        tick = time.time()
+        # print "\n\n---------------------------\nCompiling LogRegr network...\n---------------------------"
+        # tick = time.time()
         self.net.initialize()
-        tock = time.time()
-        print "Done! (%f sec.)\n\n\n" %(tock-tick)
+        # tock = time.time()
+        # print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
     def set_bestClassifier(self, best_classifier):
         '''
