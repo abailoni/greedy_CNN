@@ -5,6 +5,8 @@ from copy import deepcopy, copy
 from lasagne import layers
 from lasagne.layers import set_all_param_values, get_all_param_values
 import lasagne.init
+from lasagne.nonlinearities import identity, rectify
+from lasagne.objectives import squared_error
 import theano.tensor as T
 from nolearn.lasagne import PrintLog
 
@@ -45,7 +47,7 @@ DEFAULT_imgShape = (1024,768)
 #         # return input_shape[:-1]
 
 
-class BatchIterator_BoostLogRegr(greedy_utils.BatchIterator_Greedy):
+class BatchIterator_boostRegr(greedy_utils.BatchIterator_Greedy):
     '''
     It modifies the inputs using the processInput() class.
     Optionally it modifies the targets to fit the residuals (boosting).
@@ -57,7 +59,7 @@ class BatchIterator_BoostLogRegr(greedy_utils.BatchIterator_Greedy):
     '''
     def __init__(self, *args, **kwargs):
         self.best_classifier = kwargs.pop('best_classifier', None)
-        super(BatchIterator_BoostLogRegr, self).__init__(*args, **kwargs)
+        super(BatchIterator_boostRegr, self).__init__(*args, **kwargs)
 
     def transform(self, Xb, yb):
         if yb is not None:
@@ -68,13 +70,13 @@ class BatchIterator_BoostLogRegr(greedy_utils.BatchIterator_Greedy):
             yb = yb.astype(np.float32)
             if self.best_classifier:
                 pred = self.best_classifier.predict_proba(Xb).squeeze() #[N,x,y]
-                yb = np.absolute(pred - yb)
+                yb = pred - yb
 
-        Xb, yb = super(BatchIterator_BoostLogRegr, self).transform(Xb, yb)
+        Xb, yb = super(BatchIterator_boostRegr, self).transform(Xb, yb)
         return Xb, yb
 
 
-class Boost_LogRegr(object):
+class boostRegr_routine(object):
     '''
     Options and inputs:
         - processInput (Required): istance of the class greedy_utils.processInput.
@@ -101,18 +103,22 @@ class Boost_LogRegr(object):
         - channels_input with previous fixed layers
         - check if shuffling in the batch is done in a decent way
     '''
-    def __init__(self,previous_layers,input_filters,**kwargs):
+    def __init__(self,previous_layers,input_filters,best_classifier=None,**kwargs):
         # -----------------
         # Own attributes:
         # -----------------
-        self.filter_size = kwargs.pop('filter_size', 7)
+        self.filter_size1 = kwargs.pop('filter_size1', 7)
+        self.filter_size2 = kwargs.pop('filter_size2', 7)
+        self.num_filters1 = kwargs.pop('num_filters1', 5)
         self.input_filters = input_filters
         self.num_classes = 1
         if "num_classes" in kwargs:
-            raise Warning('No idea how to implement a classification boosting for the moment. "num_classes" parameter is fixed to 2')
+            raise Warning('Multy-class classification boosting not implemented for the moment. "num_classes" parameter is fixed to 2')
         self.batch_size = kwargs.pop('batch_size', 100)
         self.xy_input = kwargs.pop('xy_input', (None, None))
-        self.best_classifier = kwargs.pop('best_classifier', False)
+        self.best_classifier = kwargs.pop('best_classifier', None)
+        if not self.best_classifier:
+            self.best_classifier = best_classifier
         self.eval_size = kwargs.pop('eval_size', 0.1)
         if "train_split" in kwargs:
             raise ValueError('The option train_split is not used. Use eval_size instead.')
@@ -125,7 +131,7 @@ class Boost_LogRegr(object):
         # -----------------
         self.batchShuffle = kwargs.pop('batchShuffle', True)
         self.previous_layers = previous_layers
-        customBatchIterator = BatchIterator_BoostLogRegr(
+        customBatchIterator = BatchIterator_boostRegr(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
             best_classifier=self.best_classifier,
@@ -133,18 +139,33 @@ class Boost_LogRegr(object):
         )
 
         # -----------------
-        # Building the NET:
+        # Building NET:
         # -----------------
+        # Check if it's a regression or the first softmax:
+        if self.best_classifier:
+            final_nonlinearity = identity
+            objective_loss_function = squared_error
+        else:
+            # Change here for a multiclass softmax:
+            final_nonlinearity = segmNet.sigmoid_segm
+            objective_loss_function = segmNet.binary_crossentropy_segm
+            # HERE INSERT POSSIBLE WEIGHTS OF PREVIOUS LEVEL:
+            pass
         netLayers = [
             # layer dealing with the input data
             (layers.InputLayer, {'shape': (None, input_filters, self.xy_input[0], self.xy_input[1])}),
-            # first stage of our convolutional layers
             (layers.Conv2DLayer, {
-                'name': 'convLayer',
-                'num_filters': self.num_classes,
-                'filter_size': self.filter_size,
+                'name': 'conv1',
+                'num_filters': self.num_filters1,
+                'filter_size': self.filter_size1,
                 'pad':'same',
-                'nonlinearity': segmNet.sigmoid_segm}),
+                'nonlinearity': rectify}),
+            (layers.Conv2DLayer, {
+                'name': 'conv2',
+                'num_filters': self.num_classes,
+                'filter_size': self.filter_size1,
+                'pad':'same',
+                'nonlinearity': final_nonlinearity}),
             # (UpScaleLayer, {'imgShape':self.imgShape}),
         ]
 
@@ -152,15 +173,13 @@ class Boost_LogRegr(object):
             layers=netLayers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
-            objective_loss_function = segmNet.binary_crossentropy_segm,
-            scores_train = [('trn pixelAcc', pixel_accuracy_sigmoid)],
-            scores_valid = [('val pixelAcc', pixel_accuracy_sigmoid)],
+            objective_loss_function = objective_loss_function,
             y_tensor_type = T.ftensor3,
             eval_size=self.eval_size,
             regression = True,
             **kwargs
         )
-        # print "\n\n---------------------------\nCompiling LogRegr network...\n---------------------------"
+        # print "\n\n---------------------------\nCompiling regr network...\n---------------------------"
         # tick = time.time()
         self.net.initialize()
         # tock = time.time()
@@ -172,7 +191,7 @@ class Boost_LogRegr(object):
         residuals wrt this classifier from now on
         '''
         self.best_classifier = best_classifier
-        customBatchIterator = BatchIterator_BoostLogRegr(
+        customBatchIterator = BatchIterator_boostRegr(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
             best_classifier=self.best_classifier,

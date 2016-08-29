@@ -4,20 +4,23 @@ from copy import copy, deepcopy
 import theano.tensor as T
 import lasagne.layers as layers
 from lasagne.layers import set_all_param_values, get_all_param_values
+from lasagne.nonlinearities import rectify
 
 
 import pretr_nets.vgg16 as vgg16
 
 import mod_nolearn.nets.segmNet as segmNet
 import mod_nolearn.segmentFcts as segmentFcts
-import greedyNET.nets.logRegres as logRegr_routine
-import greedyNET.nets.net2 as net2_routine
+import greedyNET.nets.boostRegr as boostRegr
+import greedyNET.nets.convSoftmax as convSoftmax
 # from greedyNET.greedy_utils import clean_kwargs
 import mod_nolearn.utils as utils
 
+from nolearn.lasagne.visualize import draw_to_file
+
 
 def restore_greedyModel(model_name, path_logs='./logs/'):
-    return utils.restore_model(path_logs+model_name+'.pickle')
+    return utils.restore_model(path_logs+model_name+'/model.pickle')
 
 class greedyRoutine(object):
     def __init__(self, num_VGG16_layers, **kwargs):
@@ -43,8 +46,6 @@ class greedyRoutine(object):
         self.layers = vgg16.nolearn_vgg16_layers()[:self.num_VGG16_layers+1]
         fixed_kwargs = {
             'objective_loss_function': segmNet.binary_crossentropy_segm,
-            'scores_train': [('trn pixelAcc', segmentFcts.pixel_accuracy_sigmoid)],
-            'scores_valid': [('val pixelAcc', segmentFcts.pixel_accuracy_sigmoid)],
             'y_tensor_type': T.ftensor3,
             'eval_size': self.eval_size,
             'regression': True
@@ -54,6 +55,8 @@ class greedyRoutine(object):
 
         self.net = segmNet.segmNeuralNet(
             layers=self.layers,
+            scores_train=[('trn pixelAcc', segmentFcts.pixel_accuracy_sigmoid)],
+            scores_valid=[('val pixelAcc', segmentFcts.pixel_accuracy_sigmoid)],
             **self.net_kwargs
         )
 
@@ -73,12 +76,15 @@ class greedyRoutine(object):
         self.output_channels = self.net.layers[-1][1]['num_filters']
         self.last_layer_name = self.net.layers[-1][1]['name']
 
-        self.logRegr, self.conv = {}, {}
+        self.regr, self.convSoftmax = {}, {}
         self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
         self.preLoad = {}
 
+    def update_name(self, newname):
+        self.model_name = newname
+        self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
 
-    def train_new_layer(self, (fit_routine_LogRegr, num_LogRegr, kwargs_logRegr) , (fit_routine_net2, num_net2, kwargs_net2)):
+    def train_new_layer(self, (fit_routine_LogRegr, num_regr, kwargs_logRegr) , (fit_routine_net2, num_net2, kwargs_net2), finetune_routine_net2):
 
         # ------------------------------------------------
         # Parallelized loop: (not working for the moment)
@@ -88,7 +94,7 @@ class greedyRoutine(object):
             # -----------------------------------------
             # Fit first LogRegr:
             # -----------------------------------------
-            lgRgrNet_name = "lgRgr_L%dG%dN0" %(self.num_layers,idx_net2)
+            lgRgrNet_name = "rgr_L%dG%dN0" %(self.num_layers,idx_net2)
             init, train = self.before_Training(lgRgrNet_name)
             if init:
                 params_logRegr = deepcopy(kwargs_logRegr)
@@ -100,18 +106,19 @@ class greedyRoutine(object):
                 params_logRegr['pickle_filename'] = logs_path+'model.pickle'
                 params_logRegr['trackWeights_pdfName'] = logs_path+'weights.txt'
 
-                self.logRegr[lgRgrNet_name] = logRegr_routine.Boost_LogRegr(
+                self.regr[lgRgrNet_name] = boostRegr.boostRegr_routine(
                     self.net,
                     self.output_channels,
+                    best_classifier=None,
                     **params_logRegr
                 )
             if train:
                 print "\n\n----------------------------------------------------"
-                print "TRAINING Log. Regression - Layer %d, group %d, node 0" %(self.num_layers,idx_net2)
+                print "TRAINING regression - Layer %d, group %d, node 0" %(self.num_layers,idx_net2)
                 print "----------------------------------------------------\n\n"
-                self.logRegr[lgRgrNet_name].net = fit_routine_LogRegr(self.logRegr[lgRgrNet_name].net)
+                self.regr[lgRgrNet_name].net = fit_routine_LogRegr(self.regr[lgRgrNet_name].net)
                 self.post_Training(lgRgrNet_name)
-            self.best_classifier = self.logRegr[lgRgrNet_name].net
+            self.best_classifier = self.regr[lgRgrNet_name].net
 
             # -----------------------------------------
             # Initialize Net2:
@@ -127,16 +134,18 @@ class greedyRoutine(object):
                 params_net2['pickleModel_mode'] = 'on_training_finished'
                 params_net2['trackWeights_pdfName'] = logs_path+'weights.txt'
                 params_net2['pickle_filename'] = logs_path+'model.pickle'
-                self.conv[convNet_name] = net2_routine.Network2(
-                    self.logRegr[lgRgrNet_name],
-                    num_nodes=num_LogRegr,
+                self.convSoftmax[convNet_name] = convSoftmax.convSoftmax_routine(
+                    self.regr[lgRgrNet_name],
+                    num_nodes=num_regr,
                     **params_net2
                 )
+
+                draw_to_file(self.convSoftmax[convNet_name].net,"conv_mergeNet.pdf")
 
             # -----------------------------------------
             # Boosting loop:
             # -----------------------------------------
-            for num_node in range(1,num_LogRegr):
+            for num_node in range(1,num_regr):
                 # Fit new logRegr to residuals:
                 lgRgrNet_name = "lgRgr_L%dG%dN%d" %(self.num_layers,idx_net2,num_node)
                 init, train = self.before_Training(lgRgrNet_name)
@@ -149,19 +158,19 @@ class greedyRoutine(object):
                     params_logRegr['pickleModel_mode'] = 'on_epoch_finished'
                     params_logRegr['trackWeights_pdfName'] = logs_path+'weights.txt'
                     params_logRegr['pickle_filename'] = logs_path+'model.pickle'
-                    self.logRegr[lgRgrNet_name] = logRegr_routine.Boost_LogRegr(
+                    self.regr[lgRgrNet_name] = boostRegr.boostRegr_routine(
                         self.net,
                         self.output_channels,
+                        best_classifier=self.best_classifier,
                         **params_logRegr
                     )
-                    self.logRegr[lgRgrNet_name].set_bestClassifier(self.best_classifier)
                 if train:
                     print "\n\n----------------------------------------------------"
-                    print "TRAINING Log. Regression - Layer %d, group %d, node %d" %(self.num_layers,idx_net2,num_node)
+                    print "TRAINING regression - Layer %d, group %d, node %d" %(self.num_layers,idx_net2,num_node)
                     print "----------------------------------------------------\n\n"
-                    self.logRegr[lgRgrNet_name].net = fit_routine_LogRegr(self.logRegr[lgRgrNet_name].net)
+                    self.regr[lgRgrNet_name].net = fit_routine_LogRegr(self.regr[lgRgrNet_name].net)
                     self.post_Training(lgRgrNet_name)
-                    self.conv[convNet_name].insert_weights(self.logRegr[lgRgrNet_name])
+                    self.convSoftmax[convNet_name].insert_weights(self.regr[lgRgrNet_name])
 
                 # Fit convNet:
                 _, train_convNet = self.before_Training(convNet_name, node=num_node+1)
@@ -169,16 +178,21 @@ class greedyRoutine(object):
                     print "\n\n--------------------------------------------------------"
                     print "TRAINING Conv. layer - Layer %d, group %d, %d active nodes" %(self.num_layers,idx_net2,num_node+1)
                     print "--------------------------------------------------------\n\n"
-                    self.conv[convNet_name].net = fit_routine_net2(self.conv[convNet_name].net)
+                    print "Tuning new node:"
+                    self.convSoftmax[convNet_name].net = fit_routine_net2(self.convSoftmax[convNet_name].net)
+                    self.convSoftmax[convNet_name].activate_nodes()
+                    print "\nFinetuning all second layer until last node:"
+                    self.convSoftmax[convNet_name].net = finetune_routine_net2(self.convSoftmax[convNet_name].net)
                     self.post_Training(convNet_name)
 
                 # Update the best classifier:
-                self.best_classifier = self.conv[convNet_name].net
+                self.best_classifier = self.convSoftmax[convNet_name].net
 
-            Nets2.append(self.conv[convNet_name]) ## This should be ok
+            Nets2.append(self.convSoftmax[convNet_name]) ## This should be ok
 
         # Add new layer:
         self._insert_new_layer(Nets2[0])
+        self.pickle_greedyNET()
 
     def load_nodes(self, preLoad):
         '''
@@ -202,7 +216,7 @@ class greedyRoutine(object):
         node = kwargs.pop('node', None)
         # Check if net already in greedyNet:
         init, train = True, True
-        if net_name in self.logRegr or net_name in self.conv:
+        if net_name in self.regr or net_name in self.convSoftmax:
             init, train = False, False
 
         if node:
@@ -215,9 +229,9 @@ class greedyRoutine(object):
             if load[0]:
                 model_path = self.BASE_PATH_LOG+load[0]+'/'+net_name+'/model.pickle'
                 if 'conv' in net_name:
-                    self.conv[net_name] = utils.restore_model(model_path)
+                    self.convSoftmax[net_name] = utils.restore_model(model_path)
                 else:
-                    self.logRegr[net_name] = utils.restore_model(model_path)
+                    self.regr[net_name] = utils.restore_model(model_path)
 
                 # Copy folder and logs in new model:
                 utils.create_dir(self.BASE_PATH_LOG_MODEL+net_name)
@@ -246,7 +260,8 @@ class greedyRoutine(object):
         # -----------------
 
         prevLayers_weights = get_all_param_values(self.net.layers_[self.last_layer_name])
-        net2_weights = get_all_param_values(net2.net.layers_['conv_fixedRegr'])
+        net2_weights = get_all_param_values(net2.net.layers_['conv1'])
+        net2_weights_newNode = get_all_param_values(net2.net.layers_['conv1_newNode'])
 
         # -----------------
         # Add new layer:
@@ -255,10 +270,10 @@ class greedyRoutine(object):
         self.layers = self.layers + [
             (layers.Conv2DLayer, {
                 'name': 'conv%d' %(self.num_layers),
-                'num_filters': net2.num_classes*net2.num_nodes,
-                'filter_size': net2.filter_size_convRegr,
+                'num_filters': net2.num_classes*net2.num_nodes*net2.num_filters_regr,
+                'filter_size': net2.filter_size1,
                 'pad':'same',
-                'nonlinearity': segmNet.sigmoid_segm}),
+                'nonlinearity': rectify}),
         ]
 
         # ------------------
@@ -279,6 +294,8 @@ class greedyRoutine(object):
         # Insert old weights:
         # --------------------
         self.last_layer_name = self.net.layers[-1][1]['name']
+        nNodes = net2.num_classes*net2.num_filters_regr
+        net2_weights[0][nNodes*(net2.num_nodes-1):,:,:] = net2_weights_newNode[0]
         set_all_param_values(self.net.layers_[self.last_layer_name], prevLayers_weights+net2_weights)
 
         self.output_channels = self.net.layers[-1][1]['num_filters']

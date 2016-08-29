@@ -208,7 +208,7 @@ def print_weight_distribution(net, layer_name=None):
     for name in layers_names:
         if "conv" in name:
             layer = net.layers_[name]
-            W, _ = get_all_param_values(layer)
+            W, _ = get_all_param_values(layer)[-2:]
             mean[name], std[name], weights[name] = W.mean(), W.std(), W
 
     if layer_name:

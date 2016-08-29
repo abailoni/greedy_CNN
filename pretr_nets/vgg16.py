@@ -8,7 +8,8 @@
 
 from lasagne.layers import InputLayer
 from lasagne.layers import Pool2DLayer as PoolLayer
-from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
+# from lasagne.layers.dnn import Conv2DDNNLayer as ConvLayer
+from lasagne.layers import Conv2DLayer as ConvLayer
 
 import pickle
 from lasagne.layers import set_all_param_values

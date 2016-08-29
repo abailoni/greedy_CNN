@@ -121,73 +121,72 @@ class segmNeuralNet(modNeuralNet):
             TrainSplit(eval_size=eval_size,stratify=False)
         )
         kwargs.setdefault('objective_loss_function', categorical_crossentropy_segm)
-        kwargs.setdefault('scores_train', [('trn pixelAcc', pixel_accuracy)])
-        if eval_size!=0:
-            kwargs.setdefault('scores_valid', [('val pixelAcc', pixel_accuracy)])
-            # kwargs.setdefault('scores_valid', [('val pixelAcc', pixel_accuracy), ('val meanIU', meanIU)])
+
+        # kwargs.setdefault('scores_train', [('trn pixelAcc', pixel_accuracy)])
+        # if eval_size!=0:
+        #     kwargs.setdefault('scores_valid', [('val pixelAcc', pixel_accuracy)])
 
         super(segmNeuralNet, self).__init__(*args, **kwargs)
 
 
-    # THIS IS REALLY BAD, but I don't see any solution at the moment...
-    def _create_iter_funcs(self, layers, objective, update, output_type):
-        y_batch = output_type('y_batch')
+    # def _create_iter_funcs(self, layers, objective, update, output_type):
+    #     y_batch = output_type('y_batch')
 
-        output_layer = layers[-1]
-        objective_kw = self._get_params_for('objective')
+    #     output_layer = layers[-1]
+    #     objective_kw = self._get_params_for('objective')
 
-        loss_train = objective(
-            layers, target=y_batch, **objective_kw)
-        loss_eval = objective(
-            layers, target=y_batch, deterministic=True, **objective_kw)
-        predict_proba = get_output(output_layer, None, deterministic=True)
-        if not self.regression:
-            # THE ONLY CHANGED LINE:
-            # predict = predict_proba.argmax(axis=1)
-            # accuracy = T.mean(T.eq(predict, y_batch))
-            accuracy = loss_eval
-        else:
-            accuracy = loss_eval
+    #     loss_train = objective(
+    #         layers, target=y_batch, **objective_kw)
+    #     loss_eval = objective(
+    #         layers, target=y_batch, deterministic=True, **objective_kw)
+    #     predict_proba = get_output(output_layer, None, deterministic=True)
+    #     if not self.regression:
+    #         # THE ONLY CHANGED LINE:
+    #         predict = predict_proba.argmax(axis=1)
+    #         accuracy = T.mean(T.eq(predict, y_batch))
+    #         # accuracy = loss_eval
+    #     else:
+    #         accuracy = loss_eval
 
-        scores_train = [
-            s[1](predict_proba, y_batch) for s in self.scores_train]
-        scores_valid = [
-            s[1](predict_proba, y_batch) for s in self.scores_valid]
+    #     scores_train = [
+    #         s[1](predict_proba, y_batch) for s in self.scores_train]
+    #     scores_valid = [
+    #         s[1](predict_proba, y_batch) for s in self.scores_valid]
 
-        all_params = self.get_all_params(trainable=True)
-        grads = theano.grad(loss_train, all_params)
-        for idx, param in enumerate(all_params):
-            grad_scale = getattr(param.tag, 'grad_scale', 1)
-            if grad_scale != 1:
-                grads[idx] *= grad_scale
-        update_params = self._get_params_for('update')
-        updates = update(grads, all_params, **update_params)
+    #     all_params = self.get_all_params(trainable=True)
+    #     grads = theano.grad(loss_train, all_params)
+    #     for idx, param in enumerate(all_params):
+    #         grad_scale = getattr(param.tag, 'grad_scale', 1)
+    #         if grad_scale != 1:
+    #             grads[idx] *= grad_scale
+    #     update_params = self._get_params_for('update')
+    #     updates = update(grads, all_params, **update_params)
 
-        input_layers = [layer for layer in layers.values()
-                        if isinstance(layer, InputLayer)]
+    #     input_layers = [layer for layer in layers.values()
+    #                     if isinstance(layer, InputLayer)]
 
-        X_inputs = [theano.In(input_layer.input_var, name=input_layer.name)
-                    for input_layer in input_layers]
-        inputs = X_inputs + [theano.In(y_batch, name="y")]
+    #     X_inputs = [theano.In(input_layer.input_var, name=input_layer.name)
+    #                 for input_layer in input_layers]
+    #     inputs = X_inputs + [theano.In(y_batch, name="y")]
 
-        train_iter = theano.function(
-            inputs=inputs,
-            outputs=[loss_train] + scores_train,
-            updates=updates,
-            allow_input_downcast=True,
-            )
-        eval_iter = theano.function(
-            inputs=inputs,
-            outputs=[loss_eval, accuracy] + scores_valid,
-            allow_input_downcast=True,
-            )
-        predict_iter = theano.function(
-            inputs=X_inputs,
-            outputs=predict_proba,
-            allow_input_downcast=True,
-            )
+    #     train_iter = theano.function(
+    #         inputs=inputs,
+    #         outputs=[loss_train] + scores_train,
+    #         updates=updates,
+    #         allow_input_downcast=True,
+    #         )
+    #     eval_iter = theano.function(
+    #         inputs=inputs,
+    #         outputs=[loss_eval, accuracy] + scores_valid,
+    #         allow_input_downcast=True,
+    #         )
+    #     predict_iter = theano.function(
+    #         inputs=X_inputs,
+    #         outputs=predict_proba,
+    #         allow_input_downcast=True,
+    #         )
 
-        return train_iter, eval_iter, predict_iter
+    #     return train_iter, eval_iter, predict_iter
 
 
 

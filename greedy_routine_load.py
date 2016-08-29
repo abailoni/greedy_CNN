@@ -33,9 +33,12 @@ X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,
 # raise Warning("Stop here!")
 
 # ------ # ------ # ------- # ------- #
-#        MAIN GREEDY ROUTINE:         #
+#        LOAD GREEDY ROUTINE:         #
 # ------ # ------ # ------- # ------- #
-from greedyNET.nets.greedyNet import greedyRoutine
+from greedyNET.nets.greedyNet import restore_greedyModel
+
+nolearn_kwargs = {
+}
 
 eval_size = 0.1
 nolearn_kwargs = {
@@ -51,33 +54,14 @@ num_VGG16_layers = 2
 
 now = datetime.datetime.now()
 
-greedy_routine = greedyRoutine(
-    num_VGG16_layers,
-    eval_size=eval_size,
-    # model_name='first_regr_'+now.strftime("%m-%d_%H-%M"),
-    model_name="NET_2.0_ole",
-    **join_dict(nolearn_kwargs, greedy_kwargs)
-)
 
-# Load pretrained nodes:
-preLoad = {
-    'lgRgr_L0G0N0': ('FIRST_2', False),
-    'lgRgr_L0G0N1': ('FIRST_2', False),
-    'lgRgr_L0G0N2': ('FIRST_2', False),
-    'lgRgr_L0G0N3': ('FIRST_2', False),
-    'lgRgr_L0G0N4': ('FIRST_2', False),
-    'lgRgr_L1G0N0': ('FIRST_2', False),
-    'lgRgr_L1G0N1': ('FIRST_2', False),
-    'lgRgr_L1G0N2': ('FIRST_2', False),
-    'lgRgr_L1G0N3': ('FIRST_2', False),
-    'cnv_L0_G0': ('FIRST_2', False),
-    'cnv_L1_G0': ('FIRST_2', False, 2),
-}
-# greedy_routine.load_nodes(preLoad)
 
+
+greedy_routine = restore_greedyModel('NET_2.0_ole')
+greedy_routine.update_name('NET_2.0_ole_B')
 
 # -----------------------------------------
-# SubNets params:
+# subNets params:
 # -----------------------------------------
 lrn_rate_rgr = [0.0001, 0.001]
 lrn_rate = [0.00005, 0.001]
@@ -126,11 +110,11 @@ convSoftmax_params = {
 # Nets fitting routines:
 # --------------------------
 def fit_naiveRoutine_logRegr(net):
-    net.fit(X_small, y_small, epochs=30)
+    net.fit(X_small, y_small, epochs=10)
     return net
 def fit_naiveRoutine_net2(net):
     net.update_learning_rate.set_value(float32(0.01))
-    net.fit(X_small, y_small, epochs=20)
+    net.fit(X_small, y_small, epochs=10)
     return net
 def finetune_naiveRoutine_net2(net):
     net.update_learning_rate.set_value(float32(0.0001))
@@ -140,6 +124,16 @@ def finetune_naiveRoutine_net2(net):
 # --------------------------
 # Train one layer:
 # --------------------------
+greedy_routine.train_new_layer(
+    (fit_naiveRoutine_logRegr,5,join_dict(nolearn_kwargs, regr_params)),
+    (fit_naiveRoutine_net2,1,join_dict(nolearn_kwargs, convSoftmax_params)),
+    finetune_naiveRoutine_net2
+)
+greedy_routine.train_new_layer(
+    (fit_naiveRoutine_logRegr,5,join_dict(nolearn_kwargs, regr_params)),
+    (fit_naiveRoutine_net2,1,join_dict(nolearn_kwargs, convSoftmax_params)),
+    finetune_naiveRoutine_net2
+)
 greedy_routine.train_new_layer(
     (fit_naiveRoutine_logRegr,5,join_dict(nolearn_kwargs, regr_params)),
     (fit_naiveRoutine_net2,1,join_dict(nolearn_kwargs, convSoftmax_params)),
