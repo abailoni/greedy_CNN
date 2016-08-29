@@ -107,11 +107,11 @@ class Network2(object):
         self.net.layers_['conv_fixedRegr'].params[self.net.layers_['conv_fixedRegr'].W].remove('trainable')
         self.net.layers_['conv_fixedRegr'].params[self.net.layers_['conv_fixedRegr'].b].remove('trainable')
 
-        print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
-        tick = time.time()
+        # print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
+        # tick = time.time()
         self.net.initialize()
-        tock = time.time()
-        print "Done! (%f sec.)\n\n\n" %(tock-tick)
+        # tock = time.time()
+        # print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
 
         # Insert the weights of the first network:

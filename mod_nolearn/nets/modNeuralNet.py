@@ -43,7 +43,7 @@ class pickle_model(object):
         Modes available:
             - on_training_finished
             - on_epoch_finished
-            - on_batch_finished
+            - on_batch_finished (deprecated)
 
         Use the parameter 'every' to decide the frequency.
         '''
@@ -59,7 +59,7 @@ class pickle_model(object):
         self.iterations += 1
         mode = self.mode
         filename = self.filename
-        basename = filename[:-7] # remove .pickle
+        # basename = filename[:-7] # remove .pickle
 
         if mode=="on_batch_finished":
             new_epoch = len(train_history)
@@ -75,9 +75,10 @@ class pickle_model(object):
                 if this_loss > best_loss:
                     return
             if mode=="on_epoch_finished":
-                utils.pickle_model(net, "%s_epoch_%d.pickle" %(basename, len(train_history)))
-            elif mode=="on_batch_finished":
-                utils.pickle_model(net, "%s_epoch_%d-%d.pickle" %(basename, len(train_history), self.sub_iter))
+                # utils.pickle_model(net, "%s_epoch_%d.pickle" %(basename, len(train_history)))
+                utils.pickle_model(net, filename)
+            # elif mode=="on_batch_finished":
+            #     utils.pickle_model(net, "%s_epoch_%d-%d.pickle" %(basename, len(train_history), self.sub_iter))
 
 
 from collections import OrderedDict
@@ -157,7 +158,7 @@ class save_subEpoch_history(object):
 
     def _write_file(self):
         results = np.array(self.results)
-        np.savetxt(self.filename, results, fmt='%.5f')
+        np.savetxt(self.filename, results, fmt='%g')
 
     def _updatePlot(self):
         plt.clf()
