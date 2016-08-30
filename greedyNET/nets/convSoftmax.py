@@ -19,6 +19,8 @@ from mod_nolearn.segmentFcts import pixel_accuracy_sigmoid
 
 class convSoftmax_routine(object):
     '''
+    TO BE COMPLETELY UPDATED
+
     This class contains the network that put together the LogRegr networks computed in the boosting procedure.
 
     Inputs and options:
@@ -34,23 +36,24 @@ class convSoftmax_routine(object):
         - mask
         - conv2
     '''
-    def __init__(self, regrNode1, **kwargs):
-        # -------------------------------------
-        # Inherited parameters from regrNode1:
-        # -------------------------------------
-        self.num_classes = regrNode1.num_classes
-        self.input_filters = regrNode1.input_filters
-        self.xy_input = regrNode1.xy_input
-        self.eval_size = regrNode1.eval_size
-        self.filter_size1 = regrNode1.filter_size1
-        self.filter_size2 = regrNode1.filter_size2
-        self.num_filters_regr = regrNode1.num_filters1
-        # Input processing:
-        self.previous_layers = regrNode1.previous_layers
-        # self.fixed_previous_layers = regrNode1.fixed_previous_layers
-        # self.channels_image = regrNode1.channels_image
-        # self.DCT_size = regrNode1.DCT_size
-        # self.imgShape = regrNode1.imgShape
+    def __init__(self,previous_layers,input_filters,**kwargs):
+        # -----------------
+        # General attributes:
+        # -----------------
+        self.filter_size1 = kwargs.pop('filter_size1', 7)
+        self.filter_size2 = kwargs.pop('filter_size2', 7)
+        self.num_filters1 = kwargs.pop('num_filters1', 5)
+        self.input_filters = input_filters
+        self.previous_layers = previous_layers
+        self.num_classes = 1
+        self.xy_input = kwargs.pop('xy_input', (None, None))
+        self.eval_size = kwargs.pop('eval_size', 0.1)
+        # Checks:
+        if "num_classes" in kwargs:
+            raise ValueError('Multy-class classification boosting not implemented for the moment. "num_classes" parameter is fixed to 2')
+        if "train_split" in kwargs:
+            raise ValueError('The option train_split is not used. Use eval_size instead.')
+
 
         # -------------------------------------
         # Specific parameters:
@@ -75,13 +78,13 @@ class convSoftmax_routine(object):
                 'shape': (None, self.input_filters, self.xy_input[0], self.xy_input[1])}),
             (layers.Conv2DLayer, {
                 'name': 'conv1',
-                'num_filters': self.num_nodes*self.num_filters_regr*self.num_classes,
+                'num_filters': self.num_nodes*self.num_filters1*self.num_classes,
                 'filter_size': self.filter_size1,
                 'pad':'same',
                 'nonlinearity': rectify}),
             (MaskLayer,{
                 'name': 'mask',
-                'num_filters_regr': self.num_filters_regr,
+                'num_filters1': self.num_filters1,
                 'num_classes': self.num_classes
                 }),
             (layers.Conv2DLayer, {
@@ -94,7 +97,7 @@ class convSoftmax_routine(object):
             (layers.Conv2DLayer, {
                 'incoming': 'inputLayer',
                 'name': 'conv1_newNode',
-                'num_filters': self.num_filters_regr*self.num_classes,
+                'num_filters': self.num_filters1*self.num_classes,
                 'filter_size': self.filter_size1,
                 'pad':'same',
                 'nonlinearity': rectify}),
@@ -134,24 +137,33 @@ class convSoftmax_routine(object):
 
         # print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
         # tick = time.time()
-        # self.net.initialize()
+        self.net.initialize()
+        print "Ciao"
         # tock = time.time()
         # print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
 
-        # Insert the weights of the first network:
-        self.insert_weights(regrNode1)
+        # # Insert the weights of the first network:
+        # self.insert_weights(regrNode1)
 
 
     def insert_weights(self, regr):
         '''
+        In order the following operations are done:
+         - Update mask main part: activate another node
+         - Copy the 'new_node' weights in the main part of the net
+         - Copy the regr weights in the 'new_node' part
+         - Recompile the net
+
         Structure of parameters:
-         - W1: (num_classes*num_filters_regr*num_nodes, num_inputs, filter_length1)
-         - b1: (num_classes*num_filters_regr*num_nodes, )
-         - W2: (num_classes, num_classes*num_filters_regr*num_nodes, filter_length2)
+         - W1: (num_classes*num_filters1*num_nodes, num_inputs, filter_length1)
+         - b1: (num_classes*num_filters1*num_nodes, )
+         - W2: (num_classes, num_classes*num_filters1*num_nodes, filter_length2)
          - b2: (num_classes,)
         '''
+        # ------------------
         # Update mask:
+        # ------------------
         self.net.layers_['mask'].add_node()
         actNode = self.net.layers_['mask'].active_nodes
         self.active_nodes = actNode
@@ -160,35 +172,35 @@ class convSoftmax_routine(object):
         # Get weights:
         # ------------------
         W1, b1, maskParam, W2, b2 = layers.get_all_param_values(self.net.layers_['conv2'])
-        oldNode_W1, oldNode_b1, oldNode_W2, oldNode_b2 = layers.get_all_param_values(self.net.layers_['conv2_newNode'])
+        newNode_W1, newNode_b1, newNode_W2, newNode_b2 = layers.get_all_param_values(self.net.layers_['conv2_newNode'])
         reg_W1, reg_b1, reg_W2, reg_b2 = layers.get_all_param_values(regr.net.layers_['conv2'])
-        if actNode!=1:
-            # --------------------
-            # Update main part:
-            # --------------------
-            nNodes = self.num_classes*self.num_filters_regr
-            start = nNodes*(actNode-2)
-            stop = nNodes*(actNode-1)
-            slice_weights = slice(start,stop)
-            W1[slice_weights,:,:], b1[slice_weights] = oldNode_W1, oldNode_b1
-            # For the moment I don't touch b2... Not sure about this...
-            W2[:,slice_weights,:], b2 = oldNode_W2, b2+oldNode_b2
-            layers.set_all_param_values(self.net.layers_['conv2'], [W1, b1, maskParam, W2, b2])
         # --------------------
-        # Update new node:
+        # Update main part:
         # --------------------
-        oldNode_W1, oldNode_b1, oldNode_W2, oldNode_b2 = reg_W1, reg_b1, reg_W2, reg_b2
-        layers.set_all_param_values(self.net.layers_['conv2_newNode'], [oldNode_W1, oldNode_b1, oldNode_W2, oldNode_b2])
+        nNodes = self.num_classes*self.num_filters1
+        start = nNodes*(actNode-1)
+        stop = nNodes*actNode
+        slice_weights = slice(start,stop)
+        W1[slice_weights,:,:], b1[slice_weights] = newNode_W1, newNode_b1
+        # For the moment I don't touch b2... Not sure about this...
+        W2[:,slice_weights,:], b2 = newNode_W2, b2+newNode_b2
+        layers.set_all_param_values(self.net.layers_['conv2'], [W1, b1, maskParam, W2, b2])
+        # --------------------
+        # Insert new node:
+        # --------------------
+        newNode_W1, newNode_b1, newNode_W2, newNode_b2 = reg_W1, reg_b1, reg_W2, reg_b2
+        layers.set_all_param_values(self.net.layers_['conv2_newNode'], [newNode_W1, newNode_b1, newNode_W2, newNode_b2])
 
-        if actNode!=1:
-            # Set layer conv2 not-trainable:
-            self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].remove('trainable')
-            self.net.layers_['conv2'].params[self.net.layers_['conv2'].b].remove('trainable')
-            self.net.initialize()
+        # --------------------
+        # Set layer conv2 not-trainable:
+        # --------------------
+        self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].remove('trainable')
+        self.net.layers_['conv2'].params[self.net.layers_['conv2'].b].remove('trainable')
+        self.net.initialize()
 
     def activate_nodes(self):
         '''
-        Update the mask and make all nodes previous to the last one added trainable
+        Makes the active weights of the main part of the net (conv2 layer) trainable. Then recompile the net.
         '''
         # Set layer conv2 trainable:
         self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].add('trainable')
@@ -234,46 +246,34 @@ class MaskLayer(layers.Layer):
     The received input should be in the form: (N, num_classes*num_nodes, dim_x, dim_y)
 
     Inputs:
-     - num_filters_regr (5)
+     - num_filters1 (5)
      - num_classes (1)
 
+    The only parameter of the layer is a 2-dim array containing the slice extremes
+    deciding the active nodes. When initialized, no nodes are active.
     '''
-    # def __init__(self, incoming, num_units, W=lasagne.init.Normal(0.01), **kwargs):
-    #     super(DotLayer, self).__init__(incoming, **kwargs)
-    #     num_inputs = self.input_shape[1]
-    #     self.num_units = num_units
-    #     self.W = self.add_param(W, (num_inputs, num_units), name='W')
 
     def __init__(self, incoming, *args, **kwargs):
-        # self.num_nodes = kwargs.pop('num_nodes', 5)
-        self.num_filters_regr = kwargs.pop('num_filters_regr', 5)
+        self.num_filters1 = kwargs.pop('num_filters1', 5)
         self.num_classes = kwargs.pop('num_classes', 1)
         super(MaskLayer, self).__init__(incoming, *args, **kwargs)
         self.active_nodes = 0
-        # For the moment, an array such that: (deprecated)
-        #   - the first element is actNods*nClas
-        #   - the second is nClas*self.num_nodes
-        self.active_nodes_slice = self.add_param(np.ones(4, dtype=np.int8), (4,), name='active_nodes_slice', trainable=False, regularizable=False)
+        self.active_nodes_slice = self.add_param(np.ones(1, dtype=np.int8), (1,), name='active_nodes_slice', trainable=False, regularizable=False)
+        #
+        self.active_nodes_slice.set_value([0])
+
 
     def add_node(self):
         '''
         Add one node and make all the others not trainable.
         '''
         self.active_nodes += 1
-        actNods, nClas, nRegNodes = self.active_nodes, self.num_classes, self.num_filters_regr
-        self.active_nodes_slice.set_value([0, 0,  (actNods-1)*nClas*nRegNodes, -1])
-
-    # def activate_nodes(self):
-    #     '''
-    #     Make all nodes previous to the last one added trainable.
-    #     '''
-    #     actNods, nClas, nRegNodes = self.active_nodes, self.num_classes, self.num_filters_regr
-    #     self.active_nodes_slice.set_value([0,0,actNods*nClas*nRegNodes, -1])
+        actNods, nClas, nRegNodes = self.active_nodes, self.num_classes, self.num_filters1
+        self.active_nodes_slice.set_value([actNods*nClas*nRegNodes])
 
 
     def get_output_for(self, input, **kwargs):
-        mod_input = T.set_subtensor(input[:,self.active_nodes_slice[0]:self.active_nodes_slice[1],:,:], 0.)
-        return T.set_subtensor(mod_input[:,self.active_nodes_slice[2]:self.active_nodes_slice[3],:,:], 0.)
+        return T.set_subtensor(input[:,self.active_nodes_slice[0]:,:,:], 0.)
 
 
 

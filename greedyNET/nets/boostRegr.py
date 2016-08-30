@@ -78,6 +78,8 @@ class BatchIterator_boostRegr(greedy_utils.BatchIterator_Greedy):
 
 class boostRegr_routine(object):
     '''
+    TO BE COMPLETELY UPDATED
+
     Options and inputs:
         - processInput (Required): istance of the class greedy_utils.processInput.
         - filter_size (7): requires an odd size to keep the same output dimension
@@ -103,34 +105,30 @@ class boostRegr_routine(object):
         - channels_input with previous fixed layers
         - check if shuffling in the batch is done in a decent way
     '''
-    def __init__(self,previous_layers,input_filters,best_classifier=None,**kwargs):
+    def __init__(self,convSoftmaxNet,**kwargs):
+        # --------------------------
+        # Inherited by convSoftmax:
+        # --------------------------
+        self.filter_size1 = convSoftmaxNet.filter_size1
+        self.filter_size2 = convSoftmaxNet.filter_size2
+        self.num_filters1 = convSoftmaxNet.num_filters1
+        self.input_filters = convSoftmaxNet.input_filters
+        self.previous_layers = convSoftmaxNet.previous_layers
+        self.num_classes = convSoftmaxNet.num_classes
+        self.xy_input = convSoftmaxNet.xy_input
+        self.eval_size = convSoftmaxNet.eval_size
+
         # -----------------
         # Own attributes:
         # -----------------
-        self.filter_size1 = kwargs.pop('filter_size1', 7)
-        self.filter_size2 = kwargs.pop('filter_size2', 7)
-        self.num_filters1 = kwargs.pop('num_filters1', 5)
-        self.input_filters = input_filters
-        self.num_classes = 1
-        if "num_classes" in kwargs:
-            raise Warning('Multy-class classification boosting not implemented for the moment. "num_classes" parameter is fixed to 2')
+        self.best_classifier = convSoftmaxNet.net
         self.batch_size = kwargs.pop('batch_size', 100)
-        self.xy_input = kwargs.pop('xy_input', (None, None))
         self.best_classifier = kwargs.pop('best_classifier', None)
-        if not self.best_classifier:
-            self.best_classifier = best_classifier
-        self.eval_size = kwargs.pop('eval_size', 0.1)
-        if "train_split" in kwargs:
-            raise ValueError('The option train_split is not used. Use eval_size instead.')
-        # self.channels_image = kwargs.pop('channels_image', 3)
-        # self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
-
+        self.batchShuffle = kwargs.pop('batchShuffle', True)
 
         # -----------------
         # Input processing:
         # -----------------
-        self.batchShuffle = kwargs.pop('batchShuffle', True)
-        self.previous_layers = previous_layers
         customBatchIterator = BatchIterator_boostRegr(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
@@ -141,19 +139,11 @@ class boostRegr_routine(object):
         # -----------------
         # Building NET:
         # -----------------
-        # Check if it's a regression or the first softmax:
-        if self.best_classifier:
-            final_nonlinearity = identity
-            objective_loss_function = squared_error
-        else:
-            # Change here for a multiclass softmax:
-            final_nonlinearity = segmNet.sigmoid_segm
-            objective_loss_function = segmNet.binary_crossentropy_segm
-            # HERE INSERT POSSIBLE WEIGHTS OF PREVIOUS LEVEL:
-            pass
+        final_nonlinearity = identity
+        objective_loss_function = squared_error
         netLayers = [
             # layer dealing with the input data
-            (layers.InputLayer, {'shape': (None, input_filters, self.xy_input[0], self.xy_input[1])}),
+            (layers.InputLayer, {'shape': (None, self.input_filters, self.xy_input[0], self.xy_input[1])}),
             (layers.Conv2DLayer, {
                 'name': 'conv1',
                 'num_filters': self.num_filters1,
@@ -187,6 +177,7 @@ class boostRegr_routine(object):
 
     def set_bestClassifier(self, best_classifier):
         '''
+        CHECK...
         It updates the best_classifier. The network will then fit the
         residuals wrt this classifier from now on
         '''
@@ -201,6 +192,9 @@ class boostRegr_routine(object):
         self.net.batch_iterator_test = customBatchIterator
 
     def _reset_weights(self):
+        '''
+        CHECK...
+        '''
         W, b = get_all_param_values(self.net.layers_['convLayer'])
         glorot, constant = lasagne.init.GlorotNormal(), lasagne.init.Constant()
         set_all_param_values(self.net.layers_['convLayer'], [glorot.sample(W.shape), constant.sample(b.shape)])

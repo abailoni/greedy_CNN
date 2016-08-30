@@ -25,12 +25,26 @@ X, y, y_mod = data_X[:used_data], data_y[:used_data], data_y_mod[:used_data]
 CROP = 10
 X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,:CROP,:CROP]
 
-# # Plot some images:
-# from mod_nolearn.visualize import plot_images
-# fig = plot_images(X[:4])
-# fig.savefig("images_or.pdf")
 
-# raise Warning("Stop here!")
+import numpy as np
+from mod_nolearn.tuneHyper import tune_hyperparams
+
+class tune_lrn_rate(tune_hyperparams):
+    def fit_model(self, param_values):
+        pass
+
+
+first = tune_lrn_rate(
+    ('update_learning_rate', 0.01, 0.00001, 'log', np.float32),
+    ('weights_init', 0.01, 0.0001, 'linear', np.float32)
+)
+
+
+
+
+
+
+
 
 # ------ # ------ # ------- # ------- #
 #        MAIN GREEDY ROUTINE:         #
@@ -87,6 +101,9 @@ regr_params = {
     'numIter_subLog': 10,
     # 'subLog_filename': 'prova_subLog.txt',
     # 'livePlot': True,
+    'num_filters1': 5,
+    'filter_size1': 11,
+    'filter_size2': 11,
     'update_learning_rate': theano.shared(float32(lrn_rate_rgr[0])),
     'update_beta1': theano.shared(float32(0.9)),
     'on_epoch_finished': [
@@ -95,17 +112,13 @@ regr_params = {
         ],
     'batch_size': 10,
     'verbose': 1,
+    'eval_size': eval_size,
     'batchShuffle': True,
     # Check weights:
     'trackWeights_freq': 30,
     'trackWeights_layerName': 'conv1',
 }
 convSoftmax_params = {
-    'num_filters1': 5,
-    'filter_size1': 11,
-    'filter_size2': 11,
-    'eval_size': eval_size,
-
     'max_epochs': 3,
     'update': adam,
     'update_learning_rate': theano.shared(float32(lrn_rate[0])),

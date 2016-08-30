@@ -25,7 +25,7 @@ def restore_greedyModel(model_name, path_logs='./logs/'):
 class greedyRoutine(object):
     def __init__(self, num_VGG16_layers, **kwargs):
         '''
-        Initialize a network that just uses the first layers of VGG16.
+        Initialize a network that uses just the first layers of VGG16.
 
         Inputs:
          - How many layers to keep of VGG16 (int).
@@ -84,111 +84,38 @@ class greedyRoutine(object):
         self.model_name = newname
         self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
 
-    def train_new_layer(self, (fit_routine_LogRegr, num_regr, kwargs_logRegr) , (fit_routine_net2, num_net2, kwargs_net2), finetune_routine_net2):
+    def train_new_layer(self, (fit_routine_regr, num_regr, kwargs_regr) , (fit_routine_net2, num_net2, kwargs_convSoftmax), finetune_routine_net2):
 
         # ------------------------------------------------
         # Parallelized loop: (not working for the moment)
         # ------------------------------------------------
+        self.best_classifier = {}
         Nets2 = []
         for idx_net2 in range(num_net2):
-            # -----------------------------------------
-            # Fit first LogRegr:
-            # -----------------------------------------
-            lgRgrNet_name = "rgr_L%dG%dN0" %(self.num_layers,idx_net2)
-            init, train = self.before_Training(lgRgrNet_name)
-            if init:
-                params_logRegr = deepcopy(kwargs_logRegr)
-                logs_path = self.BASE_PATH_LOG_MODEL+lgRgrNet_name+'/'
-                utils.create_dir(logs_path)
-                params_logRegr['subLog_filename'] = logs_path+'sub_log.txt'
-                params_logRegr['log_filename'] = logs_path+'log.txt'
-                params_logRegr['pickleModel_mode'] = 'on_epoch_finished'
-                params_logRegr['pickle_filename'] = logs_path+'model.pickle'
-                params_logRegr['trackWeights_pdfName'] = logs_path+'weights.txt'
-
-                self.regr[lgRgrNet_name] = boostRegr.boostRegr_routine(
-                    self.net,
-                    self.output_channels,
-                    best_classifier=None,
-                    **params_logRegr
-                )
-            if train:
-                print "\n\n----------------------------------------------------"
-                print "TRAINING regression - Layer %d, group %d, node 0" %(self.num_layers,idx_net2)
-                print "----------------------------------------------------\n\n"
-                self.regr[lgRgrNet_name].net = fit_routine_LogRegr(self.regr[lgRgrNet_name].net)
-                self.post_Training(lgRgrNet_name)
-            self.best_classifier = self.regr[lgRgrNet_name].net
-
-            # -----------------------------------------
-            # Initialize Net2:
-            # -----------------------------------------
-            convNet_name = "cnv_L%d_G%d"%(self.num_layers,idx_net2)
-            init, _ = self.before_Training(convNet_name)
-            if init:
-                logs_path = self.BASE_PATH_LOG_MODEL+convNet_name+'/'
-                utils.create_dir(logs_path)
-                params_net2 = deepcopy(kwargs_net2)
-                params_net2['log_filename'] = logs_path+'log.txt'
-                params_net2['subLog_filename'] = logs_path+'sub_log.txt'
-                params_net2['pickleModel_mode'] = 'on_training_finished'
-                params_net2['trackWeights_pdfName'] = logs_path+'weights.txt'
-                params_net2['pickle_filename'] = logs_path+'model.pickle'
-                self.convSoftmax[convNet_name] = convSoftmax.convSoftmax_routine(
-                    self.regr[lgRgrNet_name],
-                    num_nodes=num_regr,
-                    **params_net2
-                )
-
-                draw_to_file(self.convSoftmax[convNet_name].net,"conv_mergeNet.pdf")
+            # -------------------------------------------
+            # Fit first node and initialize convSoftmax:
+            # -------------------------------------------
+            group_label = "group_%d" %idx_net2
+            convSoftmax_name = "cnv_L%d_G%d"%(self.num_layers,idx_net2)
+            self.init_convSoftmax(convSoftmax_name, kwargs_convSoftmax, num_regr)
+            self.train_convSoftmax(convSoftmax_name, fit_routine_net2, finetune_routine_net2, idx_net2, 0)
+            self.best_classifier[group_label] = self.convSoftmax[convSoftmax_name].net
 
             # -----------------------------------------
             # Boosting loop:
             # -----------------------------------------
             for num_node in range(1,num_regr):
-                # Fit new logRegr to residuals:
-                lgRgrNet_name = "lgRgr_L%dG%dN%d" %(self.num_layers,idx_net2,num_node)
-                init, train = self.before_Training(lgRgrNet_name)
-                if init:
-                    params_logRegr = deepcopy(kwargs_logRegr)
-                    logs_path = self.BASE_PATH_LOG_MODEL+lgRgrNet_name+'/'
-                    utils.create_dir(logs_path)
-                    params_logRegr['log_filename'] = logs_path+'log.txt'
-                    params_logRegr['subLog_filename'] = logs_path+'sub_log.txt'
-                    params_logRegr['pickleModel_mode'] = 'on_epoch_finished'
-                    params_logRegr['trackWeights_pdfName'] = logs_path+'weights.txt'
-                    params_logRegr['pickle_filename'] = logs_path+'model.pickle'
-                    self.regr[lgRgrNet_name] = boostRegr.boostRegr_routine(
-                        self.net,
-                        self.output_channels,
-                        best_classifier=self.best_classifier,
-                        **params_logRegr
-                    )
-                if train:
-                    print "\n\n----------------------------------------------------"
-                    print "TRAINING regression - Layer %d, group %d, node %d" %(self.num_layers,idx_net2,num_node)
-                    print "----------------------------------------------------\n\n"
-                    self.regr[lgRgrNet_name].net = fit_routine_LogRegr(self.regr[lgRgrNet_name].net)
-                    self.post_Training(lgRgrNet_name)
-                    self.convSoftmax[convNet_name].insert_weights(self.regr[lgRgrNet_name])
+                # Fit new regression to residuals:
+                regr_name = "regr_L%dG%dN%d" %(self.num_layers,idx_net2,num_node)
+                self.init_regr(regr_name, kwargs_regr, convSoftmax_name)
+                self.train_regr(regr_name, fit_routine_regr, idx_net2, num_node)
 
-                # Fit convNet:
-                _, train_convNet = self.before_Training(convNet_name, node=num_node+1)
-                if train or train_convNet:
-                    print "\n\n--------------------------------------------------------"
-                    print "TRAINING Conv. layer - Layer %d, group %d, %d active nodes" %(self.num_layers,idx_net2,num_node+1)
-                    print "--------------------------------------------------------\n\n"
-                    print "Tuning new node:"
-                    self.convSoftmax[convNet_name].net = fit_routine_net2(self.convSoftmax[convNet_name].net)
-                    self.convSoftmax[convNet_name].activate_nodes()
-                    print "\nFinetuning all second layer until last node:"
-                    self.convSoftmax[convNet_name].net = finetune_routine_net2(self.convSoftmax[convNet_name].net)
-                    self.post_Training(convNet_name)
 
-                # Update the best classifier:
-                self.best_classifier = self.convSoftmax[convNet_name].net
+                # Insert in convSoftmax and re-train:
+                self.convSoftmax[convSoftmax_name].insert_weights(self.regr[regr_name])
+                self.train_convSoftmax(convSoftmax_name, fit_routine_net2, finetune_routine_net2, idx_net2, num_node)
 
-            Nets2.append(self.convSoftmax[convNet_name]) ## This should be ok
+            Nets2.append(self.convSoftmax[convSoftmax_name]) ## This should be ok
 
         # Add new layer:
         self._insert_new_layer(Nets2[0])
@@ -208,38 +135,95 @@ class greedyRoutine(object):
     def pickle_greedyNET(self):
         utils.pickle_model(self, self.BASE_PATH_LOG_MODEL+'model.pickle')
 
-    def before_Training(self, net_name, **kwargs):
-        '''
-        Function called before each training of a subNetwork.
-        It checks if the subNet can be loaded from a pickle file and if it should be trained.
-        '''
-        node = kwargs.pop('node', None)
-        # Check if net already in greedyNet:
-        init, train = True, True
-        if net_name in self.regr or net_name in self.convSoftmax:
-            init, train = False, False
-
-        if node:
-            train = True
-
+    def init_regr(self, net_name, kwargs, convSoftmax_name):
         if net_name in self.preLoad:
             load = self.preLoad[net_name]
-            train = load[1]
-            # Check if the net should be imported from another pretrained model:
             if load[0]:
+                # Imported from other pretrained model:
                 model_path = self.BASE_PATH_LOG+load[0]+'/'+net_name+'/model.pickle'
-                if 'conv' in net_name:
-                    self.convSoftmax[net_name] = utils.restore_model(model_path)
-                else:
-                    self.regr[net_name] = utils.restore_model(model_path)
-
+                self.regr[net_name] = utils.restore_model(model_path)
                 # Copy folder and logs in new model:
                 utils.create_dir(self.BASE_PATH_LOG_MODEL+net_name)
                 utils.copyDirectory(self.BASE_PATH_LOG+load[0]+'/'+net_name, self.BASE_PATH_LOG_MODEL+net_name)
-                # Just for conv. nets trained with a specific # of act. nodes:
-                if len(load)==3:
-                    train = True if node>load[2] else False
-        return init, train
+        elif net_name not in self.regr:
+            # Initialize new network:
+            params = deepcopy(kwargs)
+            logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
+            utils.create_dir(logs_path)
+            params['subLog_filename'] = logs_path+'sub_log.txt'
+            params['log_filename'] = logs_path+'log.txt'
+            params['pickleModel_mode'] = 'on_epoch_finished'
+            params['pickle_filename'] = logs_path+'model.pickle'
+            params['trackWeights_pdfName'] = logs_path+'weights.txt'
+
+            self.regr[net_name] = boostRegr.boostRegr_routine(
+                self.convSoftmax[convSoftmax_name],
+                **params
+            )
+
+    def init_convSoftmax(self, net_name, kwargs, num_nodes):
+        if net_name in self.preLoad:
+            load = self.preLoad[net_name]
+            if load[0]:
+                # Imported from other pretrained model:
+                model_path = self.BASE_PATH_LOG+load[0]+'/'+net_name+'/model.pickle'
+                self.convSoftmax[net_name] = utils.restore_model(model_path)
+                # Copy folder and logs in new model:
+                utils.create_dir(self.BASE_PATH_LOG_MODEL+net_name)
+                utils.copyDirectory(self.BASE_PATH_LOG+load[0]+'/'+net_name, self.BASE_PATH_LOG_MODEL+net_name)
+        elif net_name not in self.convSoftmax:
+            logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
+            utils.create_dir(logs_path)
+            params = deepcopy(kwargs)
+            params['log_filename'] = logs_path+'log.txt'
+            params['subLog_filename'] = logs_path+'sub_log.txt'
+            params['pickleModel_mode'] = 'on_training_finished'
+            params['trackWeights_pdfName'] = logs_path+'weights.txt'
+            params['pickle_filename'] = logs_path+'model.pickle'
+            self.convSoftmax[net_name] = convSoftmax.convSoftmax_routine(
+                self.net,
+                self.output_channels,
+                num_nodes=num_nodes,
+                **params
+            )
+
+    def train_regr(self, net_name, fit_routine, idx_net2, num_node):
+        train = True
+        # Check if to train:
+        if net_name in self.preLoad:
+            train = self.preLoad[net_name][1]
+
+        # Train subNet:
+        if train:
+            print "\n\n----------------------------------------------------"
+            print "TRAINING regression - Layer %d, group %d, node %d" %(self.num_layers,idx_net2,num_node)
+            print "----------------------------------------------------\n\n"
+            self.regr[net_name].net = fit_routine(self.regr[net_name].net)
+            self.post_Training(net_name)
+
+
+    def train_convSoftmax(self, net_name, fit_routine, finetune_routine, idx_net2, active_nodes=0):
+        # Check if to train:
+        train = True
+        if net_name in self.preLoad:
+            load = self.preLoad[net_name]
+            train = load[1]
+            if len(load)==3:
+                train = True if active_nodes>load[2] else False
+
+        # Train subNet:
+        if train:
+            print "\n\n--------------------------------------------------------"
+            print "TRAINING softmax - Layer %d, group %d, %d active nodes" %(self.num_layers,idx_net2,active_nodes)
+            print "--------------------------------------------------------\n\n"
+            print "Tuning new node:"
+            self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
+            if active_nodes!=0:
+                self.convSoftmax[net_name].activate_nodes()
+                print "\nFinetuning all second layer until last node:"
+                self.convSoftmax[net_name].net = finetune_routine(self.convSoftmax[net_name].net)
+            self.post_Training(net_name)
+
 
     def post_Training(self, net_name):
         '''

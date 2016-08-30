@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from tabulate import tabulate
 
 class tune_hyperparams(object):
-    def __init__(self, trainable_object, hyperparameters, **kwargs):
+    def __init__(self, hyperparameters, **kwargs):
         '''
         FOR THE MOMENT IT MAKES SENSE WITH TWO hyperparameters at time.
 
@@ -24,7 +24,7 @@ class tune_hyperparams(object):
         Further possible additions:
           - cancel training of some specific parameters
         '''
-        self.model = trainable_object
+        # self.model = trainable_object
         self.hyperparams = hyperparameters
         self.param_names = [hyperparam[0] for hyperparam in hyperparameters]
         self.num_iterations = kwargs.pop('num_iterations', 10)
