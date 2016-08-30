@@ -36,6 +36,8 @@ class tune_hyperparams(object):
     def __call__(self):
         '''
         Every time the istance is called, a tuning session starts.
+
+        The final results is a dictionary of the results, each containing an array of obtained data.
         '''
         values = self._set_hyperparameters()
         results = []
@@ -43,8 +45,7 @@ class tune_hyperparams(object):
             val_dict = {name: value for name,value in zip(self.param_names,iter_values)}
             results.append(self.fit_model(val_dict))
 
-        results = np.array(results, dtype=object).T
-        print results.shape
+        results = { key: np.array([results[i][key] for i in range(self.num_iterations)]) for key in results[0]}
         self.plot_comparison(values,results,quantity='val_loss')
         self.plot_comparison(values,results,quantity='val_acc')
         self.savefile(values, results)
@@ -90,7 +91,7 @@ class tune_hyperparams(object):
         legend = [['#']+self.param_names+[quantity for quantity in results]]
         header = tabulate(legend, tablefmt='plain')
         results = np.array([results[key] for key in results])
-        np.savetxt(self.log_filename, np.column_stack((values,results)), header=header)
+        np.savetxt(self.log_filename, np.column_stack((values,results.T)), header=header)
 
     def plot_comparison(self, values, results, quantity):
         input_x = values[:,0]
@@ -101,15 +102,25 @@ class tune_hyperparams(object):
         marker_size = 100
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        ax.scatter(input_x, input_y, marker_size, c=output)
-        ax.colorbar()
-        ax.xlabel(self.param_names[0])
+        s = ax.scatter(input_x, input_y, marker_size, c=output, cmap='Greys')
+        fig.colorbar(s)
+
+        min_x, max_x = self.hyperparams[0][1:3]
+        min_y, max_y = self.hyperparams[1][1:3]
+        # range_x = max_x-min_x
+        # range_y = max_y-min_y
+        # ax.set_xlim([min_x-range_x*0.1,max_x+range_x*0.1])
+        # ax.set_ylim([min_y-range_y*0.1,max_y+range_y*0.1])
+        ax.set_xlim([min_x,max_x])
+        ax.set_ylim([min_y,max_y])
+        ax.grid(True)
+        ax.set_xlabel(self.param_names[0])
         if self.hyperparams[0][3]=='log':
             ax.set_xscale('log')
         if self.hyperparams[1][3]=='log':
             ax.set_yscale('log')
-        ax.ylabel(self.param_names[1])
-        ax.title(quantity)
+        ax.set_ylabel(self.param_names[1])
+        ax.set_title(quantity)
         fig.set_tight_layout(True)
         fig.savefig(self.path_out+self.name+'_'+quantity+'.pdf')
 

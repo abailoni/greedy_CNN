@@ -26,26 +26,6 @@ CROP = 10
 X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,:CROP,:CROP]
 
 
-import numpy as np
-from mod_nolearn.tuneHyper import tune_hyperparams
-
-class tune_lrn_rate(tune_hyperparams):
-    def fit_model(self, param_values):
-        pass
-
-
-first = tune_lrn_rate(
-    ('update_learning_rate', 0.01, 0.00001, 'log', np.float32),
-    ('weights_init', 0.01, 0.0001, 'linear', np.float32)
-)
-
-
-
-
-
-
-
-
 # ------ # ------ # ------- # ------- #
 #        MAIN GREEDY ROUTINE:         #
 # ------ # ------ # ------- # ------- #
@@ -65,29 +45,13 @@ num_VGG16_layers = 2
 
 now = datetime.datetime.now()
 
-greedy_routine = greedyRoutine(
-    num_VGG16_layers,
-    eval_size=eval_size,
-    # model_name='first_regr_'+now.strftime("%m-%d_%H-%M"),
-    model_name="NET_2.0_ole",
-    **join_dict(nolearn_kwargs, greedy_kwargs)
-)
-
-# Load pretrained nodes:
-preLoad = {
-    'lgRgr_L0G0N0': ('FIRST_2', False),
-    'lgRgr_L0G0N1': ('FIRST_2', False),
-    'lgRgr_L0G0N2': ('FIRST_2', False),
-    'lgRgr_L0G0N3': ('FIRST_2', False),
-    'lgRgr_L0G0N4': ('FIRST_2', False),
-    'lgRgr_L1G0N0': ('FIRST_2', False),
-    'lgRgr_L1G0N1': ('FIRST_2', False),
-    'lgRgr_L1G0N2': ('FIRST_2', False),
-    'lgRgr_L1G0N3': ('FIRST_2', False),
-    'cnv_L0_G0': ('FIRST_2', False),
-    'cnv_L1_G0': ('FIRST_2', False, 2),
-}
-# greedy_routine.load_nodes(preLoad)
+# greedy_routine = greedyRoutine(
+#     num_VGG16_layers,
+#     eval_size=eval_size,
+#     # model_name='first_regr_'+now.strftime("%m-%d_%H-%M"),
+#     model_name="NET_2.0_ole",
+#     **join_dict(nolearn_kwargs, greedy_kwargs)
+# )
 
 
 # -----------------------------------------
@@ -139,30 +103,60 @@ convSoftmax_params = {
 # --------------------------
 # Nets fitting routines:
 # --------------------------
-def fit_naiveRoutine_logRegr(net):
-    net.fit(X_small, y_small, epochs=30)
-    return net
-def fit_naiveRoutine_net2(net):
-    net.update_learning_rate.set_value(float32(0.01))
-    net.fit(X_small, y_small, epochs=20)
-    return net
-def finetune_naiveRoutine_net2(net):
-    net.update_learning_rate.set_value(float32(0.0001))
+def fit_naiveRoutine_convSoft(net):
     net.fit(X_small, y_small, epochs=10)
     return net
 
-# --------------------------
-# Train one layer:
-# --------------------------
-greedy_routine.train_new_layer(
-    (fit_naiveRoutine_logRegr,5,join_dict(nolearn_kwargs, regr_params)),
-    (fit_naiveRoutine_net2,1,join_dict(nolearn_kwargs, convSoftmax_params)),
-    finetune_naiveRoutine_net2
+
+# ------ # ------ # ------- # ------- #
+#        TUNE HYPERPARAMETER:         #
+# ------ # ------ # ------- # ------- #
+
+import numpy as np
+from mod_nolearn.tuneHyper import tune_hyperparams
+
+class tune_lrn_rate(tune_hyperparams):
+    def fit_model(self, param_values):
+        # ----------------------
+        # Set values:
+        # ----------------------
+        lrn_rate, init_weights = param_values['lrn_rate'], param_values['init_weights']
+        convSoftmax_params['update_learning_rate'] = theano.shared(float32(lrn_rate))
+
+        # ----------------------
+        # Init and train net:
+        # ----------------------
+        greedy_routine = greedyRoutine(
+            num_VGG16_layers,
+            eval_size=eval_size,
+            model_name="tuning_%.3f_%.3f" %(lrn_rate,init_weights),
+            **join_dict(nolearn_kwargs, greedy_kwargs)
+        )
+        net_name = "cnv_L0_G0"
+        greedy_routine.init_convSoftmax(net_name, convSoftmax_params, 3)
+        greedy_routine.train_convSoftmax(net_name, fit_naiveRoutine_convSoft, None, 0, 0)
+
+        # ----------------------
+        # Collect results:
+        # ----------------------
+        # WRONG HERE, NOT TAKING THE BEST...
+        results = {
+            'val_loss': greedy_routine.convSoftmax[net_name].net.train_history_[-1]['train_loss'],
+            'val_acc': greedy_routine.convSoftmax[net_name].net.train_history_[-1]['val pixelAcc'],
+        }
+        return results
+
+
+
+first = tune_lrn_rate(
+    (('lrn_rate', 0.01, 0.00001, 'log', np.float32),
+    ('init_weights', 0.01, 0.0001, 'linear', np.float32)),
+    num_iterations = 3,
+    name = 'FIRST',
+    path_outputs = 'first_tuning/'
 )
 
-
-from nolearn.lasagne.visualize import draw_to_file
-draw_to_file(greedy_routine.net,"FIRST_GREEDY_NET.pdf")
-
+# FIRST ONE, OLE!
+first()
 
 
