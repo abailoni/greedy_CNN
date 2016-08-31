@@ -29,7 +29,7 @@ X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,
 # ------ # ------ # ------- # ------- #
 #        MAIN GREEDY ROUTINE:         #
 # ------ # ------ # ------- # ------- #
-from greedyNET.nets.greedyNet import greedyRoutine
+from greedyNET.nets.greedyNet import restore_greedyModel
 
 eval_size = 0.1
 nolearn_kwargs = {
@@ -59,29 +59,6 @@ now = datetime.datetime.now()
 # -----------------------------------------
 lrn_rate_rgr = [0.0001, 0.001]
 lrn_rate = [0.00005, 0.001]
-regr_params = {
-    'max_epochs': 3,
-    'update': adam,
-    'numIter_subLog': 10,
-    # 'subLog_filename': 'prova_subLog.txt',
-    # 'livePlot': True,
-    'num_filters1': 5,
-    'filter_size1': 11,
-    'filter_size2': 11,
-    'update_learning_rate': theano.shared(float32(lrn_rate_rgr[0])),
-    'update_beta1': theano.shared(float32(0.9)),
-    'on_epoch_finished': [
-        AdjustVariable('update_learning_rate', start=lrn_rate_rgr[0], mode='linear', decay_rate=lrn_rate_rgr[1]),
-        # AdjustVariable('update_momentum', start=0.9, mode='linear', stop=0.9),
-        ],
-    'batch_size': 10,
-    'verbose': 1,
-    'eval_size': eval_size,
-    'batchShuffle': True,
-    # Check weights:
-    'trackWeights_freq': 30,
-    'trackWeights_layerName': 'conv1',
-}
 convSoftmax_params = {
     'num_filters1': 5,
     'filter_size1': 11,
@@ -104,6 +81,26 @@ convSoftmax_params = {
     'batchShuffle': True,
     'verbose': 1
 }
+regr_params = {
+    'max_epochs': 10,
+    'update': adam,
+    'numIter_subLog': 5,
+    # 'subLog_filename': 'prova_subLog.txt',
+    # 'livePlot': True,
+
+    'update_learning_rate': theano.shared(float32(lrn_rate_rgr[0])),
+    'update_beta1': theano.shared(float32(0.9)),
+    'on_epoch_finished': [
+        AdjustVariable('update_learning_rate', start=lrn_rate_rgr[0], mode='linear', decay_rate=lrn_rate_rgr[1]),
+        # AdjustVariable('update_momentum', start=0.9, mode='linear', stop=0.9),
+        ],
+    'batch_size': 40,
+    'verbose': 1,
+    'batchShuffle': True,
+    # Check weights:
+    # 'trackWeights_freq': 30,
+    'trackWeights_layerName': 'conv1',
+}
 
 
 # --------------------------
@@ -112,13 +109,14 @@ convSoftmax_params = {
 def fit_naiveRoutine_convSoft(net):
     net.fit(X_small, y_small)
     return net
-
+def fit_naiveRoutine_regr(net):
+    net.fit(X_small, y_small)
+    return net
 
 # ------ # ------ # ------- # ------- #
 #        TUNE HYPERPARAMETER:         #
 # ------ # ------ # ------- # ------- #
 
-import numpy as np
 from mod_nolearn.tuneHyper import tune_hyperparams
 
 class tune_lrn_rate(tune_hyperparams):
@@ -126,41 +124,48 @@ class tune_lrn_rate(tune_hyperparams):
         # ----------------------
         # Set values:
         # ----------------------
-        lrn_rate, init_weights = param_values['lrn_rate'], param_values['init_weights']
+        lrn_rate = param_values['lrn_rate']
         convSoftmax_params['update_learning_rate'] = theano.shared(float32(lrn_rate))
 
         # ----------------------
         # Init and train net:
         # ----------------------
-        greedy_routine = greedyRoutine(
-            num_VGG16_layers,
-            eval_size=eval_size,
-            model_name="weight_tuning_%.6f" %(lrn_rate),
-            **join_dict(nolearn_kwargs, greedy_kwargs)
-        )
-        net_name = "cnv_L0_G0"
-        greedy_routine.init_convSoftmax(net_name, convSoftmax_params, 3)
-        greedy_routine.train_convSoftmax(net_name, fit_naiveRoutine_convSoft, None, 0, 0)
+        greedy_routine = restore_greedyModel('tuning_0.000537')
+        greedy_routine.BASE_PATH_LOG = path_tuning
+        print greedy_routine.BASE_PATH_LOG
+        greedy_routine.update_name("regr_tuning_%.6f" %(lrn_rate))
 
+        convSoftmax_name = "cnv_L0_G0"
+        regr_name = "regr_L0G0N1"
+
+        greedy_routine.init_regr(regr_name, regr_params, convSoftmax_name)
+        greedy_routine.train_regr(regr_name, fit_naiveRoutine_regr, 0, 1)
         # ----------------------
         # Collect results:
         # ----------------------
         # WRONG HERE, NOT TAKING THE BEST...
         results = {
-            'val_loss': greedy_routine.convSoftmax[net_name].net.train_history_[-1]['train_loss'],
-            'val_acc': greedy_routine.convSoftmax[net_name].net.train_history_[-1]['valid_loss'],
+            'val_loss': greedy_routine.regr[regr_name].net.train_history_[-1]['train_loss'],
+            'val_acc': greedy_routine.regr[regr_name].net.train_history_[-1]['valid_loss'],
         }
         return results
 
 
 
+
 first = tune_lrn_rate(
-    (('lrn_rate', 5e-2, 0.007097, 'log', np.float32),
+    (('lrn_rate', 5e-2, 1e-6, 'log', np.float32),
     ('init_weights', 0.01, 0.0001, 'linear', np.float32)),
     num_iterations = 3,
-    name = 'FIRST',
-    path_outputs = 'first_tuning2/'
+    name = "tune_first_regr_serious",
+    folder_out = 'tuning',
+    plot=False
 )
+path_tuning = first.path_out
+
+
+
+
 
 # FIRST ONE, OLE!
 first()

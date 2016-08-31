@@ -22,7 +22,8 @@ def create_dir(dir):
 
 def copyDirectory(src, dest):
     try:
-        shutil.copytree(src, dest)
+        if not os.path.exists(dest):
+            shutil.copytree(src, dest)
     # Directories are the same
     except shutil.Error as e:
         print('Directory not copied. Error: %s' % e)

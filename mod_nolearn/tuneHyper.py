@@ -2,6 +2,51 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tabulate import tabulate
 
+import mod_nolearn.utils as utils
+
+def scatter_plot(filename, quantity, column=2):
+    '''
+    Take the log file given as input from tune_hyperparams() procedure and print scatter plots.
+    '''
+    pass
+    # input_x = values[:,0]
+    # input_y = values[:,1]
+    # output = results[quantity]
+
+    # # plot
+    # marker_size = 100
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111)
+    # s = ax.scatter(input_x, input_y, marker_size, c=output, cmap='Greys')
+    # fig.colorbar(s)
+
+    # min_x, max_x = self.hyperparams[0][1:3]
+    # min_y, max_y = self.hyperparams[1][1:3]
+    # # range_x = max_x-min_x
+    # # range_y = max_y-min_y
+    # # ax.set_xlim([min_x-range_x*0.1,max_x+range_x*0.1])
+    # # ax.set_ylim([min_y-range_y*0.1,max_y+range_y*0.1])
+    # ax.set_xlim([min_x,max_x])
+    # ax.set_ylim([min_y,max_y])
+    # ax.grid(True)
+    # ax.set_xlabel(self.param_names[0])
+    # if self.hyperparams[0][3]=='log':
+    #     ax.set_xscale('log')
+    # if self.hyperparams[1][3]=='log':
+    #     ax.set_yscale('log')
+    # ax.set_ylabel(self.param_names[1])
+    # ax.set_title(quantity)
+    # fig.set_tight_layout(True)
+    # fig.savefig(self.path_out+self.name+'_'+quantity+'.pdf')
+
+def compare_parameter():
+    '''
+    Take all the models trained in a tuning procedure and plot some quantity (e.g.
+        the loss) for every model.
+    '''
+    pass
+
+
 class tune_hyperparams(object):
     def __init__(self, hyperparameters, **kwargs):
         '''
@@ -24,14 +69,16 @@ class tune_hyperparams(object):
         Further possible additions:
           - cancel training of some specific parameters
         '''
-        # self.model = trainable_object
         self.hyperparams = hyperparameters
         self.param_names = [hyperparam[0] for hyperparam in hyperparameters]
         self.num_iterations = kwargs.pop('num_iterations', 10)
-        self.path_out = kwargs.pop('path_outputs', './')
         self.name = kwargs.pop('name', 'tuningHyper')
-        self.log_filename = kwargs.pop('log_filename', self.path_out+self.name+'.txt')
+        self.folder_out = kwargs.pop('folder_out', './'+self.name)
+        self.path_out = self.folder_out+'/'+self.name+'/'
+        utils.create_dir(self.path_out)
+        self.log_filename = self.path_out+'log.txt'
 
+        self.plot_flag = kwargs.pop('plot', True)
 
     def __call__(self):
         '''
@@ -44,12 +91,13 @@ class tune_hyperparams(object):
         for iter_values in values:
             val_dict = {name: value for name,value in zip(self.param_names,iter_values)}
             results.append(self.fit_model(val_dict))
+            results_mod = { key: np.array([results[i][key] for i in range(self.num_iterations)]) for key in results[0]}
+            self.savefile(values, results_mod)
 
-        results = { key: np.array([results[i][key] for i in range(self.num_iterations)]) for key in results[0]}
-        self.plot_comparison(values,results,quantity='val_loss')
-        self.plot_comparison(values,results,quantity='val_acc')
-        self.savefile(values, results)
-        self.on_tuning_finished(values, results)
+        if self.plot_flag:
+            self.plot_comparison(values,results_mod,quantity='val_loss')
+            self.plot_comparison(values,results_mod,quantity='val_acc')
+        self.on_tuning_finished(values, results_mod)
 
     def fit_model(self, param_values):
         '''
@@ -90,8 +138,11 @@ class tune_hyperparams(object):
     def savefile(self, values, results):
         legend = [['#']+self.param_names+[quantity for quantity in results]]
         header = tabulate(legend, tablefmt='plain')
-        results = np.array([results[key] for key in results])
-        np.savetxt(self.log_filename, np.column_stack((values,results.T)), header=header)
+        results = np.array([results[key] for key in results]).T
+        if results.shape[0]<values.shape[0]:
+            # Cut values:
+            values[:results.shape[0]-1,:]
+        np.savetxt(self.log_filename, np.column_stack((values,results)), header=header)
 
     def plot_comparison(self, values, results, quantity):
         input_x = values[:,0]

@@ -1,6 +1,7 @@
 import time
 import numpy as np
 from copy import deepcopy, copy
+import json
 
 from lasagne import layers
 from lasagne.layers import set_all_param_values, get_all_param_values
@@ -79,6 +80,8 @@ class BatchIterator_boostRegr(greedy_utils.BatchIterator_Greedy):
 class boostRegr_routine(object):
     '''
     TO BE COMPLETELY UPDATED
+        - logs_path
+
 
     Options and inputs:
         - processInput (Required): istance of the class greedy_utils.processInput.
@@ -106,22 +109,25 @@ class boostRegr_routine(object):
         - check if shuffling in the batch is done in a decent way
     '''
     def __init__(self,convSoftmaxNet,**kwargs):
+        info = deepcopy(kwargs)
+        info['logs_path'] = kwargs.pop('logs_path', './logs/')
         # --------------------------
         # Inherited by convSoftmax:
         # --------------------------
+        self.xy_input = convSoftmaxNet.xy_input
         self.filter_size1 = convSoftmaxNet.filter_size1
         self.filter_size2 = convSoftmaxNet.filter_size2
-        self.num_filters1 = convSoftmaxNet.num_filters1
         self.input_filters = convSoftmaxNet.input_filters
-        self.previous_layers = convSoftmaxNet.previous_layers
+        self.num_filters1 = convSoftmaxNet.num_filters1
         self.num_classes = convSoftmaxNet.num_classes
-        self.xy_input = convSoftmaxNet.xy_input
+        self.previous_layers = convSoftmaxNet.previous_layers
         self.eval_size = convSoftmaxNet.eval_size
+        self.best_classifier = convSoftmaxNet.net
 
         # -----------------
         # Own attributes:
         # -----------------
-        self.best_classifier = convSoftmaxNet.net
+        self.name = kwargs.pop('name', 'boostRegr')
         self.batch_size = kwargs.pop('batch_size', 100)
         self.best_classifier = kwargs.pop('best_classifier', None)
         self.batchShuffle = kwargs.pop('batchShuffle', True)
@@ -174,6 +180,26 @@ class boostRegr_routine(object):
         self.net.initialize()
         # tock = time.time()
         # print "Done! (%f sec.)\n\n\n" %(tock-tick)
+
+        # -------------------------------------
+        # SAVE INFO NET:
+        # -------------------------------------
+        info['filter_size1'] = self.filter_size1
+        info['filter_size2'] = self.filter_size2
+        info['input_filters'] = self.input_filters
+        info['num_filters1'] = self.num_filters1
+        info['num_classes'] = self.num_classes
+        info['xy_input'] = self.xy_input
+        info['eval_size'] = self.eval_size
+
+        info.pop('update', None)
+        info.pop('on_epoch_finished', None)
+        info.pop('on_batch_finished', None)
+        info.pop('on_training_finished', None)
+        for key in [key for key in info if 'update_' in key]:
+            info[key] = info[key].get_value().item()
+        json.dump(info, file(info['logs_path']+'/info-net.txt', 'w'))
+
 
     def set_bestClassifier(self, best_classifier):
         '''

@@ -155,6 +155,7 @@ class greedyRoutine(object):
             params['pickleModel_mode'] = 'on_epoch_finished'
             params['pickle_filename'] = logs_path+'model.pickle'
             params['trackWeights_pdfName'] = logs_path+'weights.txt'
+            params['logs_path'] = logs_path
 
             self.regr[net_name] = boostRegr.boostRegr_routine(
                 self.convSoftmax[convSoftmax_name],
@@ -173,13 +174,17 @@ class greedyRoutine(object):
                 utils.copyDirectory(self.BASE_PATH_LOG+load[0]+'/'+net_name, self.BASE_PATH_LOG_MODEL+net_name)
         elif net_name not in self.convSoftmax:
             logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
+
+            logs_path = logs_path+net_name+'/'
             utils.create_dir(logs_path)
             params = deepcopy(kwargs)
+            params['log_path'] = logs_path+net_name+'/'
             params['log_filename'] = logs_path+'log.txt'
             params['subLog_filename'] = logs_path+'sub_log.txt'
             params['pickleModel_mode'] = 'on_training_finished'
             params['trackWeights_pdfName'] = logs_path+'weights.txt'
             params['pickle_filename'] = logs_path+'model.pickle'
+            params['logs_path'] = logs_path
             self.convSoftmax[net_name] = convSoftmax.convSoftmax_routine(
                 self.net,
                 self.output_channels,

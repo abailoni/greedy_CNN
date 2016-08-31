@@ -4,6 +4,7 @@
 import time
 import numpy as np
 from copy import deepcopy
+import json
 
 import theano.tensor as T
 from lasagne import layers
@@ -11,6 +12,7 @@ from lasagne.layers import set_all_param_values, get_all_param_values
 from lasagne.nonlinearities import rectify, identity
 import lasagne.init
 
+from lasagne.init import HeNormal
 
 import greedyNET.greedy_utils as greedy_utils
 import mod_nolearn.nets.segmNet as segmNet
@@ -37,6 +39,8 @@ class convSoftmax_routine(object):
         - conv2
     '''
     def __init__(self,previous_layers,input_filters,**kwargs):
+        info = deepcopy(kwargs)
+        info['logs_path'] = kwargs.pop('logs_path', './logs/')
         # -----------------
         # General attributes:
         # -----------------
@@ -58,6 +62,8 @@ class convSoftmax_routine(object):
         # -------------------------------------
         # Specific parameters:
         # -------------------------------------
+        # self.weights_HeGainin = kwargs.pop('weights_HeGain', 1.)
+        self.name = kwargs.pop('name', 'boostRegr')
         self.batch_size = kwargs.pop('batch_size', 100)
         self.batchShuffle = kwargs.pop('batchShuffle', True)
         self.num_nodes = kwargs.pop('num_nodes', 5)
@@ -100,12 +106,14 @@ class convSoftmax_routine(object):
                 'num_filters': self.num_filters1*self.num_classes,
                 'filter_size': self.filter_size1,
                 'pad':'same',
+                'W': HeNormal(np.sqrt(2)),
                 'nonlinearity': rectify}),
             (layers.Conv2DLayer, {
                 'name': 'conv2_newNode',
                 'num_filters': self.num_classes,
                 'filter_size': self.filter_size2,
                 'pad':'same',
+                'W': HeNormal(1.),
                 'nonlinearity': identity}),
             (layers.ElemwiseMergeLayer, {
                 'incomings': ['conv2', 'conv2_newNode'],
@@ -138,13 +146,25 @@ class convSoftmax_routine(object):
         # print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
         # tick = time.time()
         self.net.initialize()
-        print "Ciao"
         # tock = time.time()
         # print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
 
         # # Insert the weights of the first network:
         # self.insert_weights(regrNode1)
+
+        # -------------------------------------
+        # SAVE INFO NET:
+        # -------------------------------------
+        info['num_classes'] = 1
+        info.pop('update', None)
+        info.pop('on_epoch_finished', None)
+        info.pop('on_batch_finished', None)
+        info.pop('on_training_finished', None)
+        for key in [key for key in info if 'update_' in key]:
+            info[key] = info[key].get_value().item()
+        json.dump(info, file(info['logs_path']+self.name+'/info-net.txt', 'w'))
+
 
 
     def insert_weights(self, regr):
