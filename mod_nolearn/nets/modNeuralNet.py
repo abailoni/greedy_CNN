@@ -22,6 +22,8 @@ class AdjustVariable(object):
     def __call__(self, nn, train_history):
         epoch = train_history[-1]['epoch']
         if self.stop:
+            if train_history[-1]['epoch']>=nn.max_epochs:
+                epoch = epoch%nn.max_epochs
             if self.ls is None:
                 self.ls = np.linspace(self.start, self.stop, nn.max_epochs)
             new_value = utils.float32(self.ls[epoch - 1])

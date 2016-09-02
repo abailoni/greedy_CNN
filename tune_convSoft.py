@@ -3,8 +3,6 @@
 import datetime
 import numpy as np
 
-from copy import copy
-
 import theano
 from lasagne.updates import adam, nesterov_momentum
 from greedyNET.utils_fcts import join_dict
@@ -31,7 +29,7 @@ X_small, y_small, y_mod_small = X[:,:,:CROP,:CROP], y[:,:CROP,:CROP], y_mod[:,:,
 # ------ # ------ # ------- # ------- #
 #        MAIN GREEDY ROUTINE:         #
 # ------ # ------ # ------- # ------- #
-from greedyNET.nets.greedyNet import restore_greedyModel
+from greedyNET.nets.greedyNet import greedyRoutine
 
 eval_size = 0.1
 nolearn_kwargs = {
@@ -45,7 +43,6 @@ greedy_kwargs = {
 
 num_VGG16_layers = 2
 
-now = datetime.datetime.now()
 
 # greedy_routine = greedyRoutine(
 #     num_VGG16_layers,
@@ -59,52 +56,56 @@ now = datetime.datetime.now()
 # -----------------------------------------
 # SubNets params:
 # -----------------------------------------
-# lrn_rate = [0.00005, 0.001]
-# convSoftmax_params = {
-#     'num_filters1': 5,
-#     'filter_size1': 11,
-#     'filter_size2': 11,
-#     'eval_size': eval_size,
+lrn_rate = [0.00005, 0.001]
+convSoftmax_params = {
+    'num_filters1': 20,
+    'filter_size1': 3,
+    'filter_size2': 3,
+    'eval_size': eval_size,
 
-#     'max_epochs': 16,
-#     'update': adam,
-#     'update_learning_rate': theano.shared(float32(lrn_rate[0])),
-#     # 'weights_HeGain': np.sqrt(2),
-#     'numIter_subLog': 5,
-#     'update_beta1': theano.shared(float32(0.9)),
-#     'on_epoch_finished': [
-#         AdjustVariable('update_learning_rate', start=lrn_rate[0], mode='linear', decay_rate=lrn_rate[1]),
-#         # AdjustVariable('update_momentum', start=0.9, mode='linear', stop=0.9),
-#         ],
-#     'batch_size': 40,
-#     # 'trackWeights_freq': 30,
-#     'trackWeights_layerName': 'conv2_newNode',
-#     'batchShuffle': True,
-#     'verbose': 1
-# }
-
-
-lrn_rate_rgr = [0.0001, 0.2]
-regr_params = {
-    'max_epochs': 10,
+    'max_epochs': 15,
     'update': adam,
+    'update_learning_rate': theano.shared(float32(lrn_rate[0])),
+    # 'weights_HeGain': np.sqrt(2),
+
     'numIter_subLog': 2,
-    # 'subLog_filename': 'prova_subLog.txt',
     # 'livePlot': True,
 
+
     'update_beta1': theano.shared(float32(0.9)),
-    # 'update_learning_rate': theano.shared(float32(lrn_rate_rgr[0])),
     # 'on_epoch_finished': [
-    #     AdjustVariable('update_learning_rate', start=lrn_rate_rgr[0], mode='log', decay_rate=lrn_rate_rgr[1]),
+    #     AdjustVariable('update_learning_rate', start=lrn_rate[0], mode='linear', decay_rate=lrn_rate[1]),
     #     # AdjustVariable('update_momentum', start=0.9, mode='linear', stop=0.9),
     #     ],
     'batch_size': 40,
-    'verbose': 1,
-    'batchShuffle': True,
-    # Check weights:
     # 'trackWeights_freq': 30,
-    # 'trackWeights_layerName': 'conv1',
+    # 'trackWeights_layerName': 'conv2_newNode',
+    'batchShuffle': True,
+    'verbose': 1
 }
+
+
+# lrn_rate_rgr = [0.0001, 0.2]
+# regr_params = {
+#     'max_epochs': 10,
+#     'update': adam,
+#     'numIter_subLog': 2,
+#     # 'subLog_filename': 'prova_subLog.txt',
+#     'livePlot': True,
+
+#     'update_learning_rate': theano.shared(float32(lrn_rate_rgr[0])),
+#     'update_beta1': theano.shared(float32(0.9)),
+#     'on_epoch_finished': [
+#         AdjustVariable('update_learning_rate', start=lrn_rate_rgr[0], mode='log', decay_rate=lrn_rate_rgr[1]),
+#         # AdjustVariable('update_momentum', start=0.9, mode='linear', stop=0.9),
+#         ],
+#     'batch_size': 40,
+#     'verbose': 1,
+#     'batchShuffle': True,
+#     # Check weights:
+#     # 'trackWeights_freq': 30,
+#     'trackWeights_layerName': 'conv1',
+# }
 
 
 # --------------------------
@@ -129,47 +130,51 @@ class tune_lrn_rate(tune_hyperparams):
         # Set values:
         # ----------------------
         lrn_rate, decay_rate = param_values['lrn_rate'], param_values['decay_rate']
-        regr_params['update_learning_rate'] = theano.shared(float32(lrn_rate))
-        regr_params['on_epoch_finished'] = [
+        convSoftmax_params['update_learning_rate'] = theano.shared(float32(lrn_rate))
+        convSoftmax_params['on_epoch_finished'] = [
             AdjustVariable('update_beta1', start=0.9, mode='linear', stop=0.999),
             AdjustVariable('update_learning_rate', start=lrn_rate, mode='log', decay_rate=decay_rate)]
 
         # ----------------------
         # Init and train net:
         # ----------------------
-        greedy_routine = restore_greedyModel('model_371860', 'test/test/')
-        greedy_routine.BASE_PATH_LOG = copy(self.path_out)
-        greedy_routine.update_name(model_name)
+        greedy_routine = greedyRoutine(
+            num_VGG16_layers,
+            eval_size=eval_size,
+            model_name=model_name,
+            BASE_PATH_LOG=self.path_out,
+            **join_dict(nolearn_kwargs, greedy_kwargs)
+        )
+        net_name = "cnv_L0_G0"
+        greedy_routine.init_convSoftmax(net_name, convSoftmax_params, 5)
+        greedy_routine.train_convSoftmax(net_name, fit_naiveRoutine_convSoft, None, 0, 0)
 
-        convSoftmax_name = "cnv_L0_G0"
-        regr_name = "regr_L0G0N1"
-
-        greedy_routine.init_regr(regr_name, regr_params, convSoftmax_name)
-        greedy_routine.train_regr(regr_name, fit_naiveRoutine_regr, 0, 1)
         # ----------------------
         # Collect results:
         # ----------------------
-        val_loss = np.array([greedy_routine.regr[regr_name].net.train_history_[i]['train_loss'] for i in range(len(greedy_routine.regr[regr_name].net.train_history_))])
+        val_loss = np.array([greedy_routine.convSoftmax[net_name].net.train_history_[i]['train_loss'] for i in range(len(greedy_routine.convSoftmax[net_name].net.train_history_))])
         best = np.argmin(val_loss)
         results = {
-            'train_loss': greedy_routine.regr[regr_name].net.train_history_[best]['train_loss'],
-            'valid_loss': greedy_routine.regr[regr_name].net.train_history_[best]['valid_loss'],
+            'train_loss': greedy_routine.convSoftmax[net_name].net.train_history_[best]['train_loss'],
+            'valid_loss': greedy_routine.convSoftmax[net_name].net.train_history_[best]['valid_loss'],
         }
         return results
 
 
 
+
 first = tune_lrn_rate(
     (
-        ('lrn_rate', 5e-3, 1e-1, 'log', np.float32),
-        ('decay_rate', 1e-3, 9e-1, 'log', np.float32)
+        ('lrn_rate', 2e-3, 1e-1, 'log', np.float32),
+        ('decay_rate', 1e-3, 2e-2, 'log', np.float32)
     ),
     ['train_loss', 'valid_loss'],
-    num_iterations = 80,
-    name = "tune_first_regr3",
+    num_iterations = 20,
+    name = "tune_first_node3",
     folder_out = 'tuning',
     plot=False
 )
+
 
 # FIRST ONE, OLE!
 first()

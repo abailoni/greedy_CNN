@@ -86,7 +86,7 @@ now = datetime.datetime.now()
 
 lrn_rate_rgr = [0.0001, 0.2]
 regr_params = {
-    'max_epochs': 10,
+    'max_epochs': 15,
     'update': adam,
     'numIter_subLog': 2,
     # 'subLog_filename': 'prova_subLog.txt',
@@ -113,6 +113,9 @@ regr_params = {
 def fit_naiveRoutine_convSoft(net):
     net.fit(X_small, y_small)
     return net
+def fit_naiveRoutine_convSoft_finetune(net):
+    net.fit(X_small, y_small)
+    return net
 def fit_naiveRoutine_regr(net):
     net.fit(X_small, y_small)
     return net
@@ -137,23 +140,25 @@ class tune_lrn_rate(tune_hyperparams):
         # ----------------------
         # Init and train net:
         # ----------------------
-        greedy_routine = restore_greedyModel('model_371860', 'test/test/')
+        greedy_routine = restore_greedyModel('model_725251', 'tuning/tune_first_regr2/')
         greedy_routine.BASE_PATH_LOG = copy(self.path_out)
         greedy_routine.update_name(model_name)
+
+        print greedy_routine.net.on_batch_finished
 
         convSoftmax_name = "cnv_L0_G0"
         regr_name = "regr_L0G0N1"
 
-        greedy_routine.init_regr(regr_name, regr_params, convSoftmax_name)
-        greedy_routine.train_regr(regr_name, fit_naiveRoutine_regr, 0, 1)
+        greedy_routine.convSoftmax[convSoftmax_name].insert_weights(greedy_routine.regr[regr_name])
+        greedy_routine.train_convSoftmax(convSoftmax_name, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune, 0, 1)
         # ----------------------
         # Collect results:
         # ----------------------
-        val_loss = np.array([greedy_routine.regr[regr_name].net.train_history_[i]['train_loss'] for i in range(len(greedy_routine.regr[regr_name].net.train_history_))])
+        val_loss = np.array([greedy_routine.convSoftmax[convSoftmax_name].net.train_history_[i]['train_loss'] for i in range(len(greedy_routine.convSoftmax[convSoftmax_name].net.train_history_))])
         best = np.argmin(val_loss)
         results = {
-            'train_loss': greedy_routine.regr[regr_name].net.train_history_[best]['train_loss'],
-            'valid_loss': greedy_routine.regr[regr_name].net.train_history_[best]['valid_loss'],
+            'train_loss': greedy_routine.convSoftmax[convSoftmax_name].net.train_history_[best]['train_loss'],
+            'valid_loss': greedy_routine.convSoftmax[convSoftmax_name].net.train_history_[best]['valid_loss'],
         }
         return results
 
@@ -161,12 +166,12 @@ class tune_lrn_rate(tune_hyperparams):
 
 first = tune_lrn_rate(
     (
-        ('lrn_rate', 5e-3, 1e-1, 'log', np.float32),
+        ('lrn_rate', 5e-5, 5e-1, 'log', np.float32),
         ('decay_rate', 1e-3, 9e-1, 'log', np.float32)
     ),
     ['train_loss', 'valid_loss'],
-    num_iterations = 80,
-    name = "tune_first_regr3",
+    num_iterations = 20,
+    name = "tune_convSoft2",
     folder_out = 'tuning',
     plot=False
 )

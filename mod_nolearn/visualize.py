@@ -48,11 +48,11 @@ def plot_images(images, figsize=(6, 6)):
     nrows = np.ceil(np.sqrt(shape[0])).astype(int)
     ncols = nrows
 
-    # Readjust mean image and variance:
-    mean_train = np.reshape([[[ 73.15835921 , 82.90891754, 72.39239876]]],(3,1,1)) /255.
-    var_train = np.reshape([[[ 2237.79144756,  2326.24575092, 2256.68620499]]],(3,1,1)) / 255.**2
-    images = np.add(images, mean_train)
-    images = np.multiply(images, np.sqrt(var_train))
+    # # Readjust mean image and variance:
+    # mean_train = np.reshape([[[ 73.15835921 , 82.90891754, 72.39239876]]],(3,1,1)) /255.
+    # var_train = np.reshape([[[ 2237.79144756,  2326.24575092, 2256.68620499]]],(3,1,1)) / 255.**2
+    # images = np.add(images, mean_train)
+    # images = np.multiply(images, np.sqrt(var_train))
 
     figs, axes = plt.subplots(nrows, ncols, squeeze=False)
 
@@ -65,6 +65,25 @@ def plot_images(images, figsize=(6, 6)):
             break
         axes[r, c].imshow(images[i].transpose((1,2,0)))
     return plt
+
+def plot_GrTruth(images, figsize=(6, 6)):
+    shape = images.shape
+    nrows = np.ceil(np.sqrt(shape[0])).astype(int)
+    ncols = nrows
+
+
+    figs, axes = plt.subplots(nrows, ncols, squeeze=False)
+
+    for ax in axes.flatten():
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.axis('off')
+    for i, (r, c) in enumerate(product(range(nrows), range(ncols))):
+        if i >= shape[0]:
+            break
+        axes[r, c].imshow(images[i])
+    return plt
+
 
 from lasagne.layers import get_all_param_values
 
@@ -133,7 +152,7 @@ def check_matplot_arguments(type_of_plot,**kargs):
 def plot_fcts(axis, x, ys, **plot_kargs):
     plot_kargs = check_matplot_arguments("linePlot",**plot_kargs)
 
-    matplotlib.rcParams['text.usetex'] = True
+    # matplotlib.rcParams['text.usetex'] = True
     font_style = {'weight' : 'normal', 'size': plot_kargs['ticks_size'],'family':'serif','serif':['Palatino']}
     matplotlib.rc('font',**font_style)
 
@@ -198,7 +217,7 @@ def plot_fcts_show(x, ys, **plot_kargs):
 
     plot_kargs = check_matplot_arguments("linePlot",**plot_kargs)
 
-    matplotlib.rcParams['text.usetex'] = True
+    # matplotlib.rcParams['text.usetex'] = True
     font_style = {'weight' : 'normal', 'size': plot_kargs['ticks_size'],'family':'serif','serif':['Palatino']}
     matplotlib.rc('font',**font_style)
 
@@ -230,7 +249,7 @@ def plot_fcts_show(x, ys, **plot_kargs):
 def plot_fcts_PRO(axis, xs, ys, **plot_kargs):
     plot_kargs = check_matplot_arguments("linePlot",**plot_kargs)
 
-    matplotlib.rcParams['text.usetex'] = True
+    # matplotlib.rcParams['text.usetex'] = True
     font_style = {'weight' : 'normal', 'size': plot_kargs['ticks_size'],'family':'serif','serif':['Palatino']}
     matplotlib.rc('font',**font_style)
 

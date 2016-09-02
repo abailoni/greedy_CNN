@@ -65,7 +65,7 @@ def build_model(input_var, data_size=(None, 3, None, None)):
 
 def import_model():
     print "Importing pretrained net..."
-    model = pickle.load(open('/mnt/data2/abailoni/pretrained/vgg16.pkl'))
+    model = pickle.load(open('/mnt/localdata01/abailoni/pretrained/vgg16.pkl'))
     return model
 
 

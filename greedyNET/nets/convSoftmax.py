@@ -163,7 +163,7 @@ class convSoftmax_routine(object):
         info.pop('on_training_finished', None)
         for key in [key for key in info if 'update_' in key]:
             info[key] = info[key].get_value().item()
-        json.dump(info, file(info['logs_path']+self.name+'/info-net.txt', 'w'))
+        json.dump(info, file(info['logs_path']+'/info-net.txt', 'w'))
 
 
 

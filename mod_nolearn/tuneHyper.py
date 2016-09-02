@@ -1,64 +1,176 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from tabulate import tabulate
+import json
+import os
 
 import mod_nolearn.utils as utils
+import mod_nolearn.visualize as vis
 
-def scatter_plot(filename, quantity, column=2):
+def scatter_plot(folder, tun_ID=None, quantity=None, exclude=None):
     '''
     Take the log file given as input from tune_hyperparams() procedure and print scatter plots.
+
+    Inputs:
+        - folder with tuning files
+        - if any ID is passed, all tuning data are merged (not implemented)
+        - name of the quantity (if None, all are printed)
+        - exclude N big values from the plot
+
+    Remark: if more files are used and merge, the same quantities should be present in each file.
     '''
-    pass
-    # input_x = values[:,0]
-    # input_y = values[:,1]
-    # output = results[quantity]
+    # Collect data:
+    info_files = []
+    data = []
+    if tun_ID:
+        data.append(np.loadtxt(folder+'/log-%d.txt' %tun_ID))
+        with open(folder+'/info-tuning_%d.txt' %tun_ID) as info_file:
+            info_files.append(json.load(info_file))
+    else:
+        # IMPLEMENT REGEX!
+        log_list = [os.path.join(dirpath, f)
+            for dirpath, dirnames, files in os.walk(folder)
+            for f in files if f.startswith('log-')]
+        info_list = [os.path.join(dirpath, f)
+            for dirpath, dirnames, files in os.walk(folder)
+            for f in files if f.startswith('info-tuning_')]
+        for info_name in info_list:
+            with open(info_name) as info_file:
+                info_files.append(json.load(info_file))
+        data = [np.loadtxt(filename) for filename in log_list]
+    outputs = info_files[0]['outputs']
 
-    # # plot
-    # marker_size = 100
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111)
-    # s = ax.scatter(input_x, input_y, marker_size, c=output, cmap='Greys')
-    # fig.colorbar(s)
+    # Merge data:
+    x_min = min([info_files[i]['hyperparams'][0][1] for i in range(len(info_files))])
+    x_max = max([info_files[i]['hyperparams'][0][2] for i in range(len(info_files))])
+    y_min = min([info_files[i]['hyperparams'][1][1] for i in range(len(info_files))])
+    y_max = max([info_files[i]['hyperparams'][1][2] for i in range(len(info_files))])
+    x_info = info_files[0]['hyperparams'][0]
+    y_info = info_files[0]['hyperparams'][1]
+    all_data = np.row_stack((data[i] for i in range(len(data))))
 
-    # min_x, max_x = self.hyperparams[0][1:3]
-    # min_y, max_y = self.hyperparams[1][1:3]
-    # # range_x = max_x-min_x
-    # # range_y = max_y-min_y
-    # # ax.set_xlim([min_x-range_x*0.1,max_x+range_x*0.1])
-    # # ax.set_ylim([min_y-range_y*0.1,max_y+range_y*0.1])
-    # ax.set_xlim([min_x,max_x])
-    # ax.set_ylim([min_y,max_y])
-    # ax.grid(True)
-    # ax.set_xlabel(self.param_names[0])
-    # if self.hyperparams[0][3]=='log':
-    #     ax.set_xscale('log')
-    # if self.hyperparams[1][3]=='log':
-    #     ax.set_yscale('log')
-    # ax.set_ylabel(self.param_names[1])
-    # ax.set_title(quantity)
-    # fig.set_tight_layout(True)
-    # fig.savefig(self.path_out+self.name+'_'+quantity+'.pdf')
+    # Order data:
+    all_data = all_data[all_data[:,3].argsort()]
+    if exclude:
+        all_data = all_data[:-exclude]
+    input_x = all_data[:,1]
+    input_y = all_data[:,2]
 
-def compare_parameter():
+    # Collect results:
+    if quantity:
+        quantities = [quantity]
+        column = 3 + outputs.index(quantity)
+        results = [all_data[:,column]]
+    else:
+        results = all_data[:,3:].T
+        quantities = outputs
+
+    for quantity, result in zip(quantities, results):
+        # plot
+        marker_size = 100
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        s = ax.scatter(input_x, input_y, marker_size, c=result, cmap='Greys')
+        ax.scatter(input_x[:1], input_y[:1], marker_size, c=result[:1], cmap='autumn')
+        fig.colorbar(s)
+
+        ax.set_xlim([x_min,x_max])
+        ax.set_ylim([y_min,y_max])
+        ax.grid(True)
+        ax.set_xlabel(x_info[0])
+        ax.set_ylabel(y_info[0])
+        if x_info[3]=='log':
+            ax.set_xscale('log')
+        if y_info[3]=='log':
+            ax.set_yscale('log')
+        string = "  -  Best: %d, %.5f, %.5f" %(all_data[0,0], input_x[0], input_y[0])
+        ax.set_title(quantity+string)
+        fig.set_tight_layout(True)
+        name = quantity+'-'+tun_ID+'.pdf' if tun_ID else quantity+'-ALL'
+        if exclude:
+            name+='-%d' %exclude
+        fig.savefig(folder+'/'+name+'.pdf')
+
+def compare_stuff(folder, collect_function, quantity, tun_ID=None, exclude=None, plot_kwargs={}):
     '''
     Take all the models trained in a tuning procedure and plot some quantity (e.g.
         the loss) for every model.
     '''
-    pass
+    # Collect data:
+    info_files = []
+    data = []
+    if tun_ID:
+        data.append(np.loadtxt(folder+'/log-%d.txt' %tun_ID))
+        with open(folder+'/info-tuning_%d.txt' %tun_ID) as info_file:
+            info_files.append(json.load(info_file))
+    else:
+        # IMPLEMENT REGEX!
+        log_list = [os.path.join(dirpath, f)
+            for dirpath, dirnames, files in os.walk(folder)
+            for f in files if f.startswith('log-')]
+        info_list = [os.path.join(dirpath, f)
+            for dirpath, dirnames, files in os.walk(folder)
+            for f in files if f.startswith('info-tuning_')]
+        for info_name in info_list:
+            with open(info_name) as info_file:
+                info_files.append(json.load(info_file))
+        data = [np.loadtxt(filename) for filename in log_list]
+
+    # # Merge data:
+    # x_min = min([info_files[i]['hyperparams'][0][1] for i in range(len(info_files))])
+    # x_max = max([info_files[i]['hyperparams'][0][2] for i in range(len(info_files))])
+    # y_min = min([info_files[i]['hyperparams'][1][1] for i in range(len(info_files))])
+    # y_max = max([info_files[i]['hyperparams'][1][2] for i in range(len(info_files))])
+    # x_info = info_files[0]['hyperparams'][0]
+    # y_info = info_files[0]['hyperparams'][1]
+    all_data = np.row_stack((data[i] for i in range(len(data))))
+
+    # Order data:
+    all_data = all_data[all_data[:,3].argsort()]
+    if exclude:
+        all_data = all_data[:-exclude]
+    # input_x = all_data[:,1]
+    # input_y = all_data[:,2]
+    models = all_data[:,0]
+
+    outputs = [ collect_function(model, quantity, info_files[0]['path_out']) for model in models]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    vis.plot_fcts_PRO(ax, [output[0] for output in outputs], [output[1] for output in outputs], labels=models.astype(np.uint32), **plot_kwargs)
+    # vis.plot_fcts_show(axis, x, ys,     )
+    name = quantity+'-'+tun_ID+'.pdf' if tun_ID else quantity+'-ALL'
+    if exclude:
+        name+='-%d' %exclude
+    fig.savefig(folder+'/'+name+'.pdf')
+
+def analyse_model(folder, collect_function, quantities, model_ID, plot_kwargs={}):
+    '''
+    Take all the models trained in a tuning procedure and plot some quantity (e.g.
+        the loss) for every model.
+    '''
+    outputs = [ collect_function(model_ID, quantity, folder+'/') for quantity in quantities]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    vis.plot_fcts_PRO(ax, [output[0] for output in outputs], [output[1] for output in outputs], labels=quantities, **plot_kwargs)
+    # vis.plot_fcts_show(axis, x, ys,     )
+    fig.savefig(folder+'/model_%d/plot_%s.pdf' %(model_ID, quantities[0]))
+
 
 
 class tune_hyperparams(object):
-    def __init__(self, hyperparameters, **kwargs):
+    def __init__(self, hyperparameters, outputs, **kwargs):
         '''
         FOR THE MOMENT IT MAKES SENSE WITH TWO hyperparameters at time.
 
         Inputs:
-          - trainable_object: necessary??
           - hyperparameters: a tuple of lists in this form
                 (
                     ['par_name', start, stop, 'linear', np.int8],
                     ['par2_name', ...]
                 )
+          - outputs: keys-name for outputs
 
         Options:
           - name
@@ -70,15 +182,24 @@ class tune_hyperparams(object):
           - cancel training of some specific parameters
         '''
         self.hyperparams = hyperparameters
+        self.outputs = outputs
         self.param_names = [hyperparam[0] for hyperparam in hyperparameters]
         self.num_iterations = kwargs.pop('num_iterations', 10)
         self.name = kwargs.pop('name', 'tuningHyper')
         self.folder_out = kwargs.pop('folder_out', './'+self.name)
         self.path_out = self.folder_out+'/'+self.name+'/'
         utils.create_dir(self.path_out)
-        self.log_filename = self.path_out+'log.txt'
-
+        self.tune_id = np.random.randint(1e2,1e3-1)
+        self.log_filename = self.path_out+'log-%d.txt' %self.tune_id
         self.plot_flag = kwargs.pop('plot', True)
+
+        # Log info:
+        info = {}
+        info['name'] = self.name
+        info['path_out'] = self.path_out
+        info['hyperparams'] = [param[:-1] for param in self.hyperparams]
+        info['outputs'] = outputs
+        json.dump(info, file(self.path_out+'info-tuning_%d.txt' %self.tune_id, 'w'))
 
     def __call__(self):
         '''
@@ -86,20 +207,25 @@ class tune_hyperparams(object):
 
         The final results is a dictionary of the results, each containing an array of obtained data.
         '''
-        values = self._set_hyperparameters()
+        model_ids, values = self._set_hyperparameters()
         results = []
-        for iter_values in values:
+        for k, iter_values in enumerate(values):
             val_dict = {name: value for name,value in zip(self.param_names,iter_values)}
-            results.append(self.fit_model(val_dict))
-            results_mod = { key: np.array([results[i][key] for i in range(self.num_iterations)]) for key in results[0]}
-            self.savefile(values, results_mod)
+            print "\n\n=========================="
+            print "TUNING %d:" %model_ids[k]
+            print val_dict
+            print "=========================="
+            results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+            results_mod = { key: np.array([results[i][key] for i in range(k+1)]) for key in results[0]}
+            self.savefile(model_ids, values, results_mod)
 
         if self.plot_flag:
+            raise Warning("Wrong implemented...")
             self.plot_comparison(values,results_mod,quantity='val_loss')
             self.plot_comparison(values,results_mod,quantity='val_acc')
         self.on_tuning_finished(values, results_mod)
 
-    def fit_model(self, param_values):
+    def fit_model(self, param_values, model_name):
         '''
         This function should be replaced by a subclass. It fits the model with the
         given values of hyperparameters and return the results.
@@ -129,20 +255,30 @@ class tune_hyperparams(object):
         values = []
         for i, hyperparam in enumerate(self.hyperparams):
             start, stop, mode, dtype = hyperparam[1:]
-            if mode=='log':
-                values.append(10**np.random.uniform(np.log10(start), np.log10(stop), size=self.num_iterations).astype(dtype))
-            if mode=='linear':
-                values.append(np.random.uniform(start, stop, size=self.num_iterations).astype(dtype))
-        return np.array(values).T
+            if stop:
+                if mode=='log':
+                    values.append(10**np.random.uniform(np.log10(start), np.log10(stop), size=self.num_iterations).astype(dtype))
+                if mode=='linear':
+                    values.append(np.random.uniform(start, stop, size=self.num_iterations).astype(dtype))
+            else:
+                # Just one iteration, for test:
+                values.append(np.array([start]*self.num_iterations))
+        model_ids = np.random.randint(1e5,1e6-1,size=self.num_iterations)
+        return model_ids, np.array(values).T
 
-    def savefile(self, values, results):
-        legend = [['#']+self.param_names+[quantity for quantity in results]]
+    def savefile(self, model_ids, values, results):
+        legend = [['ModName']+self.param_names+[quantity for quantity in results]]
         header = tabulate(legend, tablefmt='plain')
         results = np.array([results[key] for key in results]).T
         if results.shape[0]<values.shape[0]:
             # Cut values:
-            values[:results.shape[0]-1,:]
-        np.savetxt(self.log_filename, np.column_stack((values,results)), header=header)
+            values = values[:results.shape[0],:]
+            model_ids = model_ids[:results.shape[0]]
+        fmt="%d"+"\t%.5e"*(len(legend[0])-1)
+        data = np.column_stack((model_ids,values,results))
+        # Pretty bad for the index.... Order wrt loss:
+        data = data[data[:,len(self.param_names)+1].argsort()]
+        np.savetxt(self.log_filename, data, header=header, fmt=fmt)
 
     def plot_comparison(self, values, results, quantity):
         input_x = values[:,0]
