@@ -30,3 +30,18 @@ def copyDirectory(src, dest):
     # Any error saying that the directory doesn't exist
     except OSError as e:
         print('Directory not copied. Error: %s' % e)
+
+
+def deleteDirectory(path):
+    '''
+    Delete directory if there.
+    '''
+    try:
+        if os.path.exists(path):
+            shutil.rmtree(path)
+    # Directories are the same
+    except shutil.Error as e:
+        print('Directory not deleted. Error: %s' % e)
+    # Any error saying that the directory doesn't exist
+    except OSError as e:
+        print('Directory not deleted. Error: %s' % e)

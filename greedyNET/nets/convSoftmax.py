@@ -1,22 +1,20 @@
 # ------------------------------
 # For the moment just a LogRegr
 # ------------------------------
-import time
 import numpy as np
 from copy import deepcopy
 import json
 
 import theano.tensor as T
 from lasagne import layers
-from lasagne.layers import set_all_param_values, get_all_param_values
 from lasagne.nonlinearities import rectify, identity
-import lasagne.init
 
-from lasagne.init import HeNormal
+from lasagne.init import HeNormal, GlorotNormal, Normal
 
 import greedyNET.greedy_utils as greedy_utils
 import mod_nolearn.nets.segmNet as segmNet
-from mod_nolearn.segmentFcts import pixel_accuracy_sigmoid
+from mod_nolearn.segmentFcts import pixel_accuracy
+import mod_nolearn.utils as utils
 
 
 class convSoftmax_routine(object):
@@ -40,16 +38,16 @@ class convSoftmax_routine(object):
     '''
     def __init__(self,previous_layers,input_filters,**kwargs):
         info = deepcopy(kwargs)
-        info['logs_path'] = kwargs.pop('logs_path', './logs/')
         # -----------------
         # General attributes:
         # -----------------
+        self.init_weight = kwargs.pop('init_weight', 1e-3)
         self.filter_size1 = kwargs.pop('filter_size1', 7)
         self.filter_size2 = kwargs.pop('filter_size2', 7)
         self.num_filters1 = kwargs.pop('num_filters1', 5)
         self.input_filters = input_filters
         self.previous_layers = previous_layers
-        self.num_classes = 1
+        self.num_classes = 2
         self.xy_input = kwargs.pop('xy_input', (None, None))
         self.eval_size = kwargs.pop('eval_size', 0.1)
         # Checks:
@@ -63,10 +61,11 @@ class convSoftmax_routine(object):
         # Specific parameters:
         # -------------------------------------
         # self.weights_HeGainin = kwargs.pop('weights_HeGain', 1.)
-        self.name = kwargs.pop('name', 'boostRegr')
+        kwargs.setdefault('name', 'convSoftmax')
+        self.num_nodes = kwargs.pop('num_nodes', 5)
         self.batch_size = kwargs.pop('batch_size', 100)
         self.batchShuffle = kwargs.pop('batchShuffle', True)
-        self.num_nodes = kwargs.pop('num_nodes', 5)
+        self.active_nodes = 0
 
         customBatchIterator = greedy_utils.BatchIterator_Greedy(
             batch_size=self.batch_size,
@@ -84,9 +83,10 @@ class convSoftmax_routine(object):
                 'shape': (None, self.input_filters, self.xy_input[0], self.xy_input[1])}),
             (layers.Conv2DLayer, {
                 'name': 'conv1',
-                'num_filters': self.num_nodes*self.num_filters1*self.num_classes,
+                'num_filters': self.num_nodes*self.num_filters1,
                 'filter_size': self.filter_size1,
                 'pad':'same',
+                'W': Normal(std=1000),
                 'nonlinearity': rectify}),
             (MaskLayer,{
                 'name': 'mask',
@@ -98,40 +98,42 @@ class convSoftmax_routine(object):
                 'num_filters': self.num_classes,
                 'filter_size': self.filter_size2,
                 'pad':'same',
+                'W': Normal(std=1000),
                 'nonlinearity': identity}),
             # New node:
             (layers.Conv2DLayer, {
                 'incoming': 'inputLayer',
                 'name': 'conv1_newNode',
-                'num_filters': self.num_filters1*self.num_classes,
+                'num_filters': self.num_filters1,
                 'filter_size': self.filter_size1,
                 'pad':'same',
-                'W': HeNormal(np.sqrt(2)),
+                'W': Normal(std=self.init_weight),
                 'nonlinearity': rectify}),
             (layers.Conv2DLayer, {
                 'name': 'conv2_newNode',
                 'num_filters': self.num_classes,
                 'filter_size': self.filter_size2,
                 'pad':'same',
-                'W': HeNormal(1.),
+                'W': Normal(std=self.init_weight),
                 'nonlinearity': identity}),
-            (layers.ElemwiseMergeLayer, {
+            (boosting_mergeLayer, {
                 'incomings': ['conv2', 'conv2_newNode'],
-                'merge_function': T.add}),
+                'merge_function': T.add,
+                'name': 'boosting_merge'}),
             (layers.NonlinearityLayer,{
-                'nonlinearity': segmNet.sigmoid_segm}),
+                'nonlinearity': segmNet.softmax_segm}),
         ]
 
         self.net = segmNet.segmNeuralNet(
             layers=netLayers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
-            objective_loss_function = segmNet.binary_crossentropy_segm,
-            scores_train = [('trn pixelAcc', pixel_accuracy_sigmoid)],
-            scores_valid = [('val pixelAcc', pixel_accuracy_sigmoid)],
-            y_tensor_type = T.ftensor3,
+            objective_loss_function = segmNet.categorical_crossentropy_segm,
+            scores_train = [('trn pixelAcc', pixel_accuracy)],
+            # scores_valid = [('val pixelAcc', pixel_accuracy)],
+            y_tensor_type = T.ltensor3,
             eval_size=self.eval_size,
-            regression = True,
+            regression = False,
             **kwargs
         )
 
@@ -139,8 +141,6 @@ class convSoftmax_routine(object):
         self.net._output_layer = self.net.initialize_layers()
         self.net.layers_['conv1'].params[self.net.layers_['conv1'].W].remove('trainable')
         self.net.layers_['conv1'].params[self.net.layers_['conv1'].b].remove('trainable')
-        self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('trainable')
-        self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].b].remove('trainable')
 
 
         # print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
@@ -156,7 +156,7 @@ class convSoftmax_routine(object):
         # -------------------------------------
         # SAVE INFO NET:
         # -------------------------------------
-        info['num_classes'] = 1
+        info['num_classes'] = self.num_classes
         info.pop('update', None)
         info.pop('on_epoch_finished', None)
         info.pop('on_batch_finished', None)
@@ -181,6 +181,14 @@ class convSoftmax_routine(object):
          - W2: (num_classes, num_classes*num_filters1*num_nodes, filter_length2)
          - b2: (num_classes,)
         '''
+        # Only the first time:
+        # if not hasattr(self, 'active_nodes'):
+        if self.active_nodes==0:
+            self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('trainable')
+            self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].b].remove('trainable')
+            self.net._initialized = False
+            self.net.initialize()
+
         # ------------------
         # Update mask:
         # ------------------
@@ -194,10 +202,14 @@ class convSoftmax_routine(object):
         W1, b1, maskParam, W2, b2 = layers.get_all_param_values(self.net.layers_['conv2'])
         newNode_W1, newNode_b1, newNode_W2, newNode_b2 = layers.get_all_param_values(self.net.layers_['conv2_newNode'])
         reg_W1, reg_b1, reg_W2, reg_b2 = layers.get_all_param_values(regr.net.layers_['conv2'])
+        boost_const = self.net.layers_['boosting_merge'].boosting_constant.get_value()
+
         # --------------------
         # Update main part:
         # --------------------
-        nNodes = self.num_classes*self.num_filters1
+        newNode_W1 *= boost_const
+        newNode_b1 *= boost_const
+        nNodes = self.num_filters1
         start = nNodes*(actNode-1)
         stop = nNodes*actNode
         slice_weights = slice(start,stop)
@@ -211,11 +223,17 @@ class convSoftmax_routine(object):
         newNode_W1, newNode_b1, newNode_W2, newNode_b2 = reg_W1, reg_b1, reg_W2, reg_b2
         layers.set_all_param_values(self.net.layers_['conv2_newNode'], [newNode_W1, newNode_b1, newNode_W2, newNode_b2])
 
+    def deactivate_nodes(self):
         # --------------------
         # Set layer conv2 not-trainable:
         # --------------------
-        self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].remove('trainable')
-        self.net.layers_['conv2'].params[self.net.layers_['conv2'].b].remove('trainable')
+        params = self.net.layers_['conv2'].params
+        W, b = self.net.layers_['conv2'].W, self.net.layers_['conv2'].b
+        if 'trainable' in params[W]:
+            params[W].remove('trainable')
+        if 'trainable' in params[b]:
+            params[b].remove('trainable')
+        self.net._initialized = False
         self.net.initialize()
 
     def activate_nodes(self):
@@ -225,7 +243,57 @@ class convSoftmax_routine(object):
         # Set layer conv2 trainable:
         self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].add('trainable')
         self.net.layers_['conv2'].params[self.net.layers_['conv2'].b].add('trainable')
+        self.net._initialized = False
         self.net.initialize()
+
+    def deactivate_nodes_BOOST(self):
+        # --------------------
+        # Set layer conv2 and conv2-new as not-trainable. Boosting constant is trainable
+        # --------------------
+        params = self.net.layers_['conv2'].params
+        W, b = self.net.layers_['conv2'].W, self.net.layers_['conv2'].b
+        if 'trainable' in params[W]:
+            params[W].remove('trainable')
+        if 'trainable' in params[b]:
+            params[b].remove('trainable')
+
+        params = self.net.layers_['conv2_newNode'].params
+        W, b = self.net.layers_['conv2_newNode'].W, self.net.layers_['conv2_newNode'].b
+        if 'trainable' in params[W]:
+            params[W].remove('trainable')
+        if 'trainable' in params[b]:
+            params[b].remove('trainable')
+
+        params = self.net.layers_['boosting_merge'].params
+        boosting_constant = self.net.layers_['boosting_merge'].boosting_constant
+        params[boosting_constant].add('trainable')
+        boosting_constant.set_value(np.ones(1,dtype=np.float32))
+
+
+        self.net._initialized = False
+        self.net.initialize()
+
+    def activate_nodes_BOOST(self):
+        '''
+        Makes the active weights of the main part of the net (conv2 layer) trainable. Then recompile the net.
+        Furthermore the boosting constant is set as "Not trainable"
+        '''
+        # Set layer conv2 trainable:
+        self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].add('trainable')
+        self.net.layers_['conv2'].params[self.net.layers_['conv2'].b].add('trainable')
+
+        # Set layer conv2_newNode trainable:
+        self.net.layers_['conv2_newNode'].params[self.net.layers_['conv2_newNode'].W].add('trainable')
+        self.net.layers_['conv2_newNode'].params[self.net.layers_['conv2_newNode'].b].add('trainable')
+
+        # Set boostingConstant not trainable:
+        self.net.layers_['boosting_merge'].params[self.net.layers_['boosting_merge'].boosting_constant].add('trainable')
+        self.net.layers_['boosting_merge'].boosting_constant.set_value(np.ones(1,dtype=np.float32))
+
+
+        self.net._initialized = False
+        self.net.initialize()
+
 
 
     # def clone(self,**kwargs):
@@ -275,7 +343,7 @@ class MaskLayer(layers.Layer):
 
     def __init__(self, incoming, *args, **kwargs):
         self.num_filters1 = kwargs.pop('num_filters1', 5)
-        self.num_classes = kwargs.pop('num_classes', 1)
+        self.num_classes = kwargs.pop('num_classes', 2)
         super(MaskLayer, self).__init__(incoming, *args, **kwargs)
         self.active_nodes = 0
         self.active_nodes_slice = self.add_param(np.ones(1, dtype=np.int8), (1,), name='active_nodes_slice', trainable=False, regularizable=False)
@@ -288,13 +356,47 @@ class MaskLayer(layers.Layer):
         Add one node and make all the others not trainable.
         '''
         self.active_nodes += 1
-        actNods, nClas, nRegNodes = self.active_nodes, self.num_classes, self.num_filters1
-        self.active_nodes_slice.set_value([actNods*nClas*nRegNodes])
+        actNods, nRegNodes = self.active_nodes, self.num_filters1
+        self.active_nodes_slice.set_value([actNods*nRegNodes])
 
 
     def get_output_for(self, input, **kwargs):
         return T.set_subtensor(input[:,self.active_nodes_slice[0]:,:,:], 0.)
 
+class boosting_mergeLayer(layers.MergeLayer):
+    def __init__(self, incomings, merge_function, *args, **kwargs):
+        super(boosting_mergeLayer, self).__init__(incomings, *args, **kwargs)
+        self.merge_function = merge_function
+        self.boosting_constant = self.add_param(np.ones(1,dtype=np.float32), (1,), name='boosting_constant', trainable=False, regularizable=False)
+
+    def get_output_shape_for(self, input_shapes):
+        if len(input_shapes)!=2:
+            raise ValueError("Two layers need to be passed as input")
+
+        # input_shapes = autocrop_array_shapes(input_shapes, self.cropping)
+        # Infer the output shape by grabbing, for each axis, the first
+        # input size that is not `None` (if there is any)
+        output_shape = tuple(next((s for s in sizes if s is not None), None)
+                             for sizes in zip(*input_shapes))
+
+        def match(shape1, shape2):
+            return (len(shape1) == len(shape2) and
+                    all(s1 is None or s2 is None or s1 == s2
+                        for s1, s2 in zip(shape1, shape2)))
+
+        # Check for compatibility with inferred output shape
+        if not all(match(shape, output_shape) for shape in input_shapes):
+            raise ValueError("Mismatch: not all input shapes are the same")
+        return output_shape
+
+    def get_output_for(self, inputs, **kwargs):
+        output = None
+        for input in inputs:
+            if output is not None:
+                output = self.merge_function(output, self.boosting_constant*input)
+            else:
+                output = input
+        return output
 
 
 

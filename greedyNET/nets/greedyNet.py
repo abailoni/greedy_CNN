@@ -20,6 +20,7 @@ from nolearn.lasagne.visualize import draw_to_file
 
 
 def restore_greedyModel(model_name, path_logs='./logs/'):
+    # After this, if you rename the model, you should call the method update_all_paths.
     return utils.restore_model(path_logs+model_name+'/model.pickle')
 
 class greedyRoutine(object):
@@ -43,20 +44,22 @@ class greedyRoutine(object):
         self.eval_size =  kwargs.pop('eval_size',0.)
         self.model_name = kwargs.pop('model_name', 'greedyNET')
         self.BASE_PATH_LOG = kwargs.pop('BASE_PATH_LOG', "./logs/")
+        self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
         self.layers = vgg16.nolearn_vgg16_layers()[:self.num_VGG16_layers+1]
         fixed_kwargs = {
-            'objective_loss_function': segmNet.binary_crossentropy_segm,
-            'y_tensor_type': T.ftensor3,
+            'objective_loss_function': segmNet.categorical_crossentropy_segm,
+            'y_tensor_type': T.ltensor3,
             'eval_size': self.eval_size,
-            'regression': True
+            'regression': False,
+            'logs_path': self.BASE_PATH_LOG_MODEL
         }
         self.net_kwargs = kwargs.copy()
         self.net_kwargs.update(fixed_kwargs)
 
         self.net = segmNet.segmNeuralNet(
             layers=self.layers,
-            scores_train=[('trn pixelAcc', segmentFcts.pixel_accuracy_sigmoid)],
-            scores_valid=[('val pixelAcc', segmentFcts.pixel_accuracy_sigmoid)],
+            scores_train=[('trn pixelAcc', segmentFcts.pixel_accuracy)],
+            scores_valid=[('val pixelAcc', segmentFcts.pixel_accuracy)],
             **self.net_kwargs
         )
 
@@ -77,14 +80,10 @@ class greedyRoutine(object):
         self.last_layer_name = self.net.layers[-1][1]['name']
 
         self.regr, self.convSoftmax = {}, {}
-        self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
         self.preLoad = {}
 
-    def update_name(self, newname):
-        self.model_name = newname
-        self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
 
-    def train_new_layer(self, (fit_routine_regr, num_regr, kwargs_regr) , (fit_routine_net2, num_net2, kwargs_convSoftmax), finetune_routine_net2):
+    def train_new_layer(self, (fit_routine_regr, num_regr, kwargs_regr) , (fit_routine_net2, num_net2, kwargs_convSoftmax), finetune_routine_net2, adjust_convSoftmax=None):
 
         # ------------------------------------------------
         # Parallelized loop: (not working for the moment)
@@ -98,7 +97,7 @@ class greedyRoutine(object):
             group_label = "group_%d" %idx_net2
             convSoftmax_name = "cnv_L%d_G%d"%(self.num_layers,idx_net2)
             self.init_convSoftmax(convSoftmax_name, kwargs_convSoftmax, num_regr)
-            self.train_convSoftmax(convSoftmax_name, fit_routine_net2, finetune_routine_net2, idx_net2, 0)
+            self.train_convSoftmax(convSoftmax_name, idx_net2, fit_routine_net2, finetune_routine_net2,  0)
             self.best_classifier[group_label] = self.convSoftmax[convSoftmax_name].net
 
             # -----------------------------------------
@@ -108,53 +107,36 @@ class greedyRoutine(object):
                 # Fit new regression to residuals:
                 regr_name = "regr_L%dG%dN%d" %(self.num_layers,idx_net2,num_node)
                 self.init_regr(regr_name, kwargs_regr, convSoftmax_name)
-                self.train_regr(regr_name, fit_routine_regr, idx_net2, num_node)
+                train_flag = self.train_regr(regr_name,  fit_routine_regr, idx_net2, num_node)
+                # Insert in convSoftmax:
+                if train_flag:
+                    self.convSoftmax[convSoftmax_name].insert_weights(self.regr[regr_name])
 
+                # Call external function to adjust parameters:
+                if adjust_convSoftmax:
+                    self.convSoftmax[convSoftmax_name] = adjust_convSoftmax(self.convSoftmax[convSoftmax_name])
 
-                # Insert in convSoftmax and re-train:
-                self.convSoftmax[convSoftmax_name].insert_weights(self.regr[regr_name])
-                self.train_convSoftmax(convSoftmax_name, fit_routine_net2, finetune_routine_net2, idx_net2, num_node)
+                # Retrain:
+                self.train_convSoftmax(convSoftmax_name, idx_net2, fit_routine_net2, finetune_routine_net2, num_node)
 
             Nets2.append(self.convSoftmax[convSoftmax_name]) ## This should be ok
 
         # Add new layer:
         self._insert_new_layer(Nets2[0])
-        self.pickle_greedyNET()
-
-    def load_nodes(self, preLoad):
-        '''
-        Loads the specifications in order to load specific pretrained pickled nodes.
-        The input is a dictionary such that:
-            - the keys are the names of the nodes (e.g. convL0G0)
-            - each element contains a tuple such that:
-                 (name_model_from_which_import, train_flag) --> (None, True)
-        '''
-        self.preLoad = preLoad
-
-
-    def pickle_greedyNET(self):
-        utils.pickle_model(self, self.BASE_PATH_LOG_MODEL+'model.pickle')
+        # self.pickle_greedyNET()
 
     def init_regr(self, net_name, kwargs, convSoftmax_name):
-        if net_name in self.preLoad:
-            load = self.preLoad[net_name]
-            if load[0]:
-                # Imported from other pretrained model:
-                model_path = self.BASE_PATH_LOG+load[0]+'/'+net_name+'/model.pickle'
-                self.regr[net_name] = utils.restore_model(model_path)
-                # Copy folder and logs in new model:
-                utils.create_dir(self.BASE_PATH_LOG_MODEL+net_name)
-                utils.copyDirectory(self.BASE_PATH_LOG+load[0]+'/'+net_name, self.BASE_PATH_LOG_MODEL+net_name)
-        elif net_name not in self.regr:
-            # Initialize new network:
+        # If not pretrained, initialize new network:
+        if net_name not in self.regr:
             params = deepcopy(kwargs)
             logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
             utils.create_dir(logs_path)
-            params['subLog_filename'] = logs_path+'sub_log.txt'
-            params['log_filename'] = logs_path+'log.txt'
-            params['pickleModel_mode'] = 'on_epoch_finished'
-            params['pickle_filename'] = logs_path+'model.pickle'
-            params['trackWeights_pdfName'] = logs_path+'weights.txt'
+            params['log_frequency'] = 1
+            params['subLog_filename'] = 'sub_log.txt'
+            params['log_filename'] = 'log.txt'
+            # params['pickleModel_mode'] = 'on_epoch_finished'
+            params['pickle_filename'] = 'model.pickle'
+            params['trackWeights_pdfName'] = 'weights.txt'
             params['logs_path'] = logs_path
 
             self.regr[net_name] = boostRegr.boostRegr_routine(
@@ -163,24 +145,17 @@ class greedyRoutine(object):
             )
 
     def init_convSoftmax(self, net_name, kwargs, num_nodes):
-        if net_name in self.preLoad:
-            load = self.preLoad[net_name]
-            if load[0]:
-                # Imported from other pretrained model:
-                model_path = self.BASE_PATH_LOG+load[0]+'/'+net_name+'/model.pickle'
-                self.convSoftmax[net_name] = utils.restore_model(model_path)
-                # Copy folder and logs in new model:
-                utils.create_dir(self.BASE_PATH_LOG_MODEL+net_name)
-                utils.copyDirectory(self.BASE_PATH_LOG+load[0]+'/'+net_name, self.BASE_PATH_LOG_MODEL+net_name)
-        elif net_name not in self.convSoftmax:
+        # If not pretrained, initialize new network:
+        if net_name not in self.convSoftmax:
             logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
             utils.create_dir(logs_path)
             params = deepcopy(kwargs)
-            params['log_filename'] = logs_path+'log.txt'
-            params['subLog_filename'] = logs_path+'sub_log.txt'
-            params['pickleModel_mode'] = 'on_epoch_finished'
-            params['trackWeights_pdfName'] = logs_path+'weights.txt'
-            params['pickle_filename'] = logs_path+'model.pickle'
+            params['log_frequency'] = 1
+            params['log_filename'] = 'log.txt'
+            params['subLog_filename'] = 'sub_log.txt'
+            # params['pickleModel_mode'] = 'on_epoch_finished'
+            params['trackWeights_pdfName'] = 'weights.txt'
+            params['pickle_filename'] = 'model.pickle'
             params['logs_path'] = logs_path
             self.convSoftmax[net_name] = convSoftmax.convSoftmax_routine(
                 self.net,
@@ -203,8 +178,10 @@ class greedyRoutine(object):
             self.regr[net_name].net = fit_routine(self.regr[net_name].net)
             self.post_Training(net_name)
 
+        return train
 
-    def train_convSoftmax(self, net_name, fit_routine, finetune_routine, idx_net2, active_nodes=0):
+
+    def train_convSoftmax(self, net_name, idx_net2, fit_routine=None, finetune_routine=None,  active_nodes=0):
         # Check if to train:
         train = True
         if net_name in self.preLoad:
@@ -218,10 +195,14 @@ class greedyRoutine(object):
             print "\n\n--------------------------------------------------------"
             print "TRAINING softmax - Layer %d, group %d, %d active nodes" %(self.num_layers,idx_net2,active_nodes)
             print "--------------------------------------------------------\n\n"
-            print "Tuning new node:"
-            self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
             if active_nodes!=0:
-                self.convSoftmax[net_name].activate_nodes()
+                self.convSoftmax[net_name].deactivate_nodes_BOOST()
+            if fit_routine:
+                print "Tuning new node:"
+                self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
+            if active_nodes!=0:
+                self.convSoftmax[net_name].activate_nodes_BOOST()
+            if finetune_routine:
                 print "\nFinetuning all second layer until last node:"
                 self.convSoftmax[net_name].net = finetune_routine(self.convSoftmax[net_name].net)
             self.post_Training(net_name)
@@ -231,7 +212,11 @@ class greedyRoutine(object):
         '''
         Function called after each training of a subNetwork
         '''
-        self.pickle_greedyNET()
+        if 'cnv' in net_name:
+            utils.pickle_model(self.convSoftmax[net_name],self.BASE_PATH_LOG_MODEL+net_name+'/routine.pickle')
+        elif 'reg' in net_name:
+            utils.pickle_model(self.regr[net_name],self.BASE_PATH_LOG_MODEL+net_name+'/routine.pickle')
+        # self.pickle_greedyNET()
 
     def _insert_new_layer(self, net2):
         '''
@@ -256,7 +241,7 @@ class greedyRoutine(object):
         self.layers = self.layers + [
             (layers.Conv2DLayer, {
                 'name': 'conv%d' %(self.num_layers),
-                'num_filters': net2.num_classes*net2.num_nodes*net2.num_filters_regr,
+                'num_filters': net2.num_nodes*net2.num_filters1,
                 'filter_size': net2.filter_size1,
                 'pad':'same',
                 'nonlinearity': rectify}),
@@ -280,12 +265,104 @@ class greedyRoutine(object):
         # Insert old weights:
         # --------------------
         self.last_layer_name = self.net.layers[-1][1]['name']
-        nNodes = net2.num_classes*net2.num_filters_regr
+        nNodes = net2.num_filters1
         net2_weights[0][nNodes*(net2.num_nodes-1):,:,:] = net2_weights_newNode[0]
         set_all_param_values(self.net.layers_[self.last_layer_name], prevLayers_weights+net2_weights)
 
         self.output_channels = self.net.layers[-1][1]['num_filters']
 
+
+    # -------------------
+    # UTILS METHODS:
+    # -------------------
+    # To import previously pretrained full or partial Greedy models:
+    #
+    #   - create a new GreedyNET or import existing one using
+    #     restore_greedyModel()
+    #
+    #   - in order not to overwrite the old model, call update_all_paths()
+    #     to update the name (and change the logs path)
+    #
+    #   - if subNets should be loaded, call load_subNets()
+
+
+    def update_all_paths(self, newname_model, new_path=None):
+        '''
+        After restoring a greedy model or importing pre-trained subNets, this
+        method should be called to avoid inconsistencies in logs and saved data.
+
+        In order what it does:
+          - update name main model
+          - update main paths (and copy folders)
+          - update all paths of all subNets
+        '''
+        old_path_model = self.BASE_PATH_LOG_MODEL
+        if new_path:
+            self.BASE_PATH_LOG = new_path
+        self.model_name = newname_model
+        self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
+
+        # Copy directories and logs:
+        import mod_nolearn.utils as utils
+        utils.copyDirectory(old_path_model, self.BASE_PATH_LOG_MODEL)
+
+        # Update paths:
+        self.net.update_logs_path(self.BASE_PATH_LOG_MODEL)
+        self._update_subNets_paths()
+
+
+    def load_subNets(self, preLoad):
+        '''
+        Input:
+            - preLoad: a dictionary such that:
+                - the keys are the names of the nodes (e.g. convL0G0)
+                - each element contains a tuple such that:
+                     (path_to_pretr_model, train_flag)
+                     ('logs/model_A/', True, nodes_trained)
+
+        The third options indicated the pretrained nodes of a convSoftmax subNet.
+        In particular we have:
+                train = True if active_nodes>load[2] else False
+        where the active_nodes are the one in the MAIN part of the net, w/o considering the new node.
+        Conclusion: just put how many nodes have been aleardy trained in the MAIN part of the net (given by convSoft.active_nodes)
+
+        What it does in order:
+            - import subNets
+            - copy folders/logs in main model (and delete previous versions)
+            - update all paths of subNets
+        '''
+        import mod_nolearn.utils as utils
+        self.preLoad = preLoad
+        for net_name in preLoad:
+            load = preLoad[net_name]
+            if load[0]:
+                # Imported from other pretrained model:
+                subNet_old_path = load[0]+net_name+'/'
+                subNet_new_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
+                if 'reg' in net_name:
+                    self.regr[net_name] = utils.restore_model(subNet_old_path+'routine.pickle')
+                elif 'cnv' in net_name:
+                    self.convSoftmax[net_name] = utils.restore_model(subNet_old_path+'routine.pickle')
+                else:
+                    raise ValueError("Not recognized netname")
+                # Delete possible previous folders:
+                utils.deleteDirectory(subNet_new_path)
+                # Copy old subNet:
+                utils.create_dir(subNet_new_path)
+                utils.copyDirectory(subNet_old_path, subNet_new_path)
+
+        self._update_subNets_paths()
+
+
+    def _update_subNets_paths(self):
+        for net_name in self.regr:
+            self.regr[net_name].net.update_logs_path(self.BASE_PATH_LOG_MODEL+net_name+'/')
+        for net_name in self.convSoftmax:
+            self.convSoftmax[net_name].net.update_logs_path(self.BASE_PATH_LOG_MODEL+net_name+'/')
+
+
+    def pickle_greedyNET(self):
+        utils.pickle_model(self, self.BASE_PATH_LOG_MODEL+'model.pickle')
 
 
 

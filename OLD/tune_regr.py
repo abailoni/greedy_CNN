@@ -11,6 +11,8 @@ from greedyNET.utils_fcts import join_dict
 from mod_nolearn.nets.modNeuralNet import AdjustVariable
 from mod_nolearn.utils import float32
 # import matplotlib.pyplot as plt
+from mod_nolearn.segmentFcts import mean_IoU
+
 
 # -------------------------------------
 # Import cityscape:
@@ -98,7 +100,7 @@ regr_params = {
     #     AdjustVariable('update_learning_rate', start=lrn_rate_rgr[0], mode='log', decay_rate=lrn_rate_rgr[1]),
     #     # AdjustVariable('update_momentum', start=0.9, mode='linear', stop=0.9),
     #     ],
-    'batch_size': 40,
+    'batch_size': 20,
     'verbose': 1,
     'batchShuffle': True,
     # Check weights:
@@ -128,18 +130,19 @@ class tune_lrn_rate(tune_hyperparams):
         # ----------------------
         # Set values:
         # ----------------------
-        lrn_rate, decay_rate = param_values['lrn_rate'], param_values['decay_rate']
+        lrn_rate, L2 = param_values['lrn_rate'], param_values['L2']
+        regr_params['L2'] = float(L2)
         regr_params['update_learning_rate'] = theano.shared(float32(lrn_rate))
+        # REALLY BAD , TEMP:
         regr_params['on_epoch_finished'] = [
             AdjustVariable('update_beta1', start=0.9, mode='linear', stop=0.999),
-            AdjustVariable('update_learning_rate', start=lrn_rate, mode='log', decay_rate=decay_rate)]
+            AdjustVariable('update_learning_rate', start=lrn_rate, mode='log', decay_rate=1.62766e-02)]
 
         # ----------------------
         # Init and train net:
         # ----------------------
-        greedy_routine = restore_greedyModel('model_371860', 'test/test/')
-        greedy_routine.BASE_PATH_LOG = copy(self.path_out)
-        greedy_routine.update_name(model_name)
+        greedy_routine = restore_greedyModel('model_553589', 'tuning/node1_DEF/')
+        greedy_routine.update_all_paths(model_name, self.path_out)
 
         convSoftmax_name = "cnv_L0_G0"
         regr_name = "regr_L0G0N1"
@@ -149,7 +152,7 @@ class tune_lrn_rate(tune_hyperparams):
         # ----------------------
         # Collect results:
         # ----------------------
-        val_loss = np.array([greedy_routine.regr[regr_name].net.train_history_[i]['train_loss'] for i in range(len(greedy_routine.regr[regr_name].net.train_history_))])
+        val_loss = np.array([greedy_routine.regr[regr_name].net.train_history_[i]['valid_loss'] for i in range(len(greedy_routine.regr[regr_name].net.train_history_))])
         best = np.argmin(val_loss)
         results = {
             'train_loss': greedy_routine.regr[regr_name].net.train_history_[best]['train_loss'],
@@ -161,12 +164,12 @@ class tune_lrn_rate(tune_hyperparams):
 
 first = tune_lrn_rate(
     (
-        ('lrn_rate', 5e-3, 1e-1, 'log', np.float32),
-        ('decay_rate', 1e-3, 9e-1, 'log', np.float32)
+        ('lrn_rate',  1e-6, 8e-1, 'log', np.float32),
+        ('L2', 1e-6, 9e-1, 'log', np.float32)
     ),
-    ['train_loss', 'valid_loss'],
-    num_iterations = 80,
-    name = "tune_first_regr3",
+    ['train_loss', 'valid_loss' ],
+    num_iterations = 40,
+    name = "regr1_DEF",
     folder_out = 'tuning',
     plot=False
 )

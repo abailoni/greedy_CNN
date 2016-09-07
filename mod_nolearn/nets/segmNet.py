@@ -1,15 +1,15 @@
-import theano.tensor as T
 from theano.tensor.nnet import categorical_crossentropy
 from theano.tensor.nnet import softmax
 
 from nolearn.lasagne.base import TrainSplit
+import theano.tensor as T
 
 from mod_nolearn.nets.modNeuralNet import modNeuralNet
-from ..segmentFcts import meanIU, pixel_accuracy
+# from ..segmentFcts import meanIU, pixel_accuracy
 
 
 # This is computing the loss:
-def categorical_crossentropy_segm(predictions, targets):
+def categorical_crossentropy_segm(prediction_proba, targets):
     """
     MODIFICATIONS:
         - reshape targets to get a good match
@@ -36,16 +36,17 @@ def categorical_crossentropy_segm(predictions, targets):
     providing a vector of int for the targets is usually slightly more
     efficient than providing a matrix with a single 1.0 per row.
     """
-    shape = predictions.shape
-    pred_mod1 = predictions.transpose((0,2,3,1))
-    pred_mod = pred_mod1.reshape((-1,shape[1]))
-    if predictions.ndim == targets.ndim:
-        targ_mod1 = targets.transpose((0,2,3,1))
-        targ_mod = targ_mod1.reshape((-1,shape[1]))
-    else:
-        targ_mod = targets.reshape((-1,))
-    results = 1./(shape[0]) * categorical_crossentropy(pred_mod, targ_mod)
-    return results.reshape((shape[0],shape[2],shape[3]))
+    shape = T.shape(prediction_proba)
+    pred_mod1 = T.transpose(prediction_proba, (0,2,3,1))
+    pred_mod = T.reshape(pred_mod1, (-1,shape[1]))
+    # if prediction_proba.ndim == targets.ndim:
+    #     targ_mod1 = T.transpose(targets,(0,2,3,1))
+    #     targ_mod = T.reshape(targ_mod1,(-1,shape[1]))
+    # else:
+    targ_mod = T.reshape(targets, (-1,))
+    results = 1. * categorical_crossentropy(pred_mod, targ_mod)
+    results = T.reshape(results, (shape[0],shape[2],shape[3]))
+    return T.sum(results, axis=(1,2))
 
 # This is the non-linearity, giving the scores:
 def softmax_segm(x):
@@ -63,40 +64,40 @@ def softmax_segm(x):
     float32 where the sum of the row is 1 and each single value is in [0, 1]
         The output of the softmax function applied to the activation.
     """
-    shape = x.shape
-    x_mod = x.transpose((0,2,3,1)).reshape((-1,shape[1]))
+    shape = T.shape(x)
+    x_mod = T.transpose(x, (0,2,3,1))
+    x_mod = T.reshape(x_mod, (-1,shape[1]))
     results = softmax(x_mod)
-    return results.reshape((shape[0],shape[2],shape[3],shape[1])).transpose((0,3,1,2))
+    results = T.reshape(results, (shape[0],shape[2],shape[3],shape[1]))
+    return T.transpose(results, (0,3,1,2))
 
 
-# This is computing the loss:
-def binary_crossentropy_segm(predictions, targets):
-    '''
-        MODIFICATIONS:
-        - reshape targets (pixel by pixel)
-    '''
-    shape = predictions.shape
-    pred_mod = T.reshape(predictions,(-1,))
-    targ_mod = targets.reshape((-1,))
-    results = 1. * T.nnet.binary_crossentropy(pred_mod, targ_mod)
-    results.reshape(shape).sum(axis=(1,2))
-    return results
+# # This is computing the loss:
+# def binary_crossentropy_segm(predictions, targets):
+#     '''
+#         MODIFICATIONS:
+#         - reshape targets (pixel by pixel)
+#     '''
+#     shape = predictions.shape
+#     pred_mod = T.reshape(predictions,(-1,))
+#     targ_mod = targets.reshape((-1,))
+#     results = 1. * T.nnet.binary_crossentropy(pred_mod, targ_mod)
+#     results = results.reshape(shape)
+#     return results.sum(axis=(1,2))
 
-# This is the non-linearity, giving the scores:
-def sigmoid_segm(x):
-    '''
-    Adapted to pixel by pixel
-    '''
-    shape = x.shape
-    x_mod = T.reshape(x, (-1,))
-    results = T.nnet.sigmoid(x_mod)
-    return results.reshape(shape)
+# # This is the non-linearity, giving the scores:
+# def sigmoid_segm(x):
+#     '''
+#     Adapted to pixel by pixel
+#     '''
+#     x = T.extra_ops.squeeze(x)
+#     shape = x.shape
+#     x_mod = T.reshape(x, (-1,))
+#     results = T.nnet.sigmoid(x_mod)
+#     return results.reshape(shape)
 
 
 # MODULES necessary only for the last routine:
-import theano
-from lasagne.layers import InputLayer
-from lasagne.layers import get_output
 
 
 class segmNeuralNet(modNeuralNet):

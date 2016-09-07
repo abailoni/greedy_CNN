@@ -1,5 +1,5 @@
-import os
-os.environ["THEANO_FLAGS"] = "exception_verbosity=high"
+# import os
+# os.environ["THEANO_FLAGS"] = "exception_verbosity=high"
 import datetime
 import numpy as np
 

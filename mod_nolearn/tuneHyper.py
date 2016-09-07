@@ -49,6 +49,11 @@ def scatter_plot(folder, tun_ID=None, quantity=None, exclude=None):
     y_info = info_files[0]['hyperparams'][1]
     all_data = np.row_stack((data[i] for i in range(len(data))))
 
+    # Delele NaN:
+    nan_indx = (np.isnan(all_data[:,3])).nonzero()
+    all_data = np.delete(all_data,nan_indx,axis=0)
+
+
     # Order data:
     all_data = all_data[all_data[:,3].argsort()]
     if exclude:
@@ -124,6 +129,13 @@ def compare_stuff(folder, collect_function, quantity, tun_ID=None, exclude=None,
     # x_info = info_files[0]['hyperparams'][0]
     # y_info = info_files[0]['hyperparams'][1]
     all_data = np.row_stack((data[i] for i in range(len(data))))
+
+    # Delete NaN:
+    # print all_data.shape
+    nan_indx = (np.isnan(all_data[:,3])).nonzero()
+    all_data = np.delete(all_data,nan_indx,axis=0)
+    # print nan_indx
+    # print all_data.shape
 
     # Order data:
     all_data = all_data[all_data[:,3].argsort()]
@@ -212,7 +224,7 @@ class tune_hyperparams(object):
         for k, iter_values in enumerate(values):
             val_dict = {name: value for name,value in zip(self.param_names,iter_values)}
             print "\n\n=========================="
-            print "TUNING %d:" %model_ids[k]
+            print "TUNING %d: (%d)" %(model_ids[k], self.tune_id)
             print val_dict
             print "=========================="
             results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
@@ -255,29 +267,41 @@ class tune_hyperparams(object):
         values = []
         for i, hyperparam in enumerate(self.hyperparams):
             start, stop, mode, dtype = hyperparam[1:]
-            if stop:
+            if isinstance(start, list):
+                # Choose from some passed values:
+                array = np.array(start)
+                if mode=='shuffle':
+                    array = np.random.shuffle(array)
+                if self.num_iterations<array.shape[0]:
+                    array = array[:self.num_iterations]
+                else:
+                    import warnings
+                    warnings.warn("Not enough values passed for the number of iterations. Doing the passed values, but values repetition still not implemented.")
+                    self.num_iterations = array.shape[0]
+                values.append(array)
+            elif stop:
                 if mode=='log':
                     values.append(10**np.random.uniform(np.log10(start), np.log10(stop), size=self.num_iterations).astype(dtype))
                 if mode=='linear':
                     values.append(np.random.uniform(start, stop, size=self.num_iterations).astype(dtype))
             else:
-                # Just one iteration, for test:
+                # Just one repeated value, for test:
                 values.append(np.array([start]*self.num_iterations))
         model_ids = np.random.randint(1e5,1e6-1,size=self.num_iterations)
         return model_ids, np.array(values).T
 
     def savefile(self, model_ids, values, results):
-        legend = [['ModName']+self.param_names+[quantity for quantity in results]]
+        legend = [['ModName']+self.param_names+[quantity for quantity in self.outputs]]
         header = tabulate(legend, tablefmt='plain')
-        results = np.array([results[key] for key in results]).T
+        results = np.array([results[key] for key in self.outputs]).T
         if results.shape[0]<values.shape[0]:
             # Cut values:
             values = values[:results.shape[0],:]
             model_ids = model_ids[:results.shape[0]]
         fmt="%d"+"\t%.5e"*(len(legend[0])-1)
         data = np.column_stack((model_ids,values,results))
-        # Pretty bad for the index.... Order wrt loss:
-        data = data[data[:,len(self.param_names)+1].argsort()]
+        # Pretty bad for the index.... Order wrt valid loss:
+        data = data[data[:,len(self.param_names)+2].argsort()]
         np.savetxt(self.log_filename, data, header=header, fmt=fmt)
 
     def plot_comparison(self, values, results, quantity):

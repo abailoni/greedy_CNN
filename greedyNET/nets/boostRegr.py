@@ -8,12 +8,11 @@ from lasagne.layers import set_all_param_values, get_all_param_values
 import lasagne.init
 from lasagne.nonlinearities import identity, rectify
 from lasagne.objectives import squared_error
+from lasagne.init import HeNormal, Normal
 import theano.tensor as T
-from nolearn.lasagne import PrintLog
 
 import mod_nolearn.nets.segmNet as segmNet
 import greedyNET.greedy_utils as greedy_utils
-from mod_nolearn.segmentFcts import pixel_accuracy_sigmoid
 
 DEFAULT_imgShape = (1024,768)
 
@@ -70,8 +69,9 @@ class BatchIterator_boostRegr(greedy_utils.BatchIterator_Greedy):
             # Fit on residuals:
             yb = yb.astype(np.float32)
             if self.best_classifier:
-                pred = self.best_classifier.predict_proba(Xb).squeeze() #[N,x,y]
-                yb = pred - yb
+                pred_proba = self.best_classifier.predict_proba(Xb) #[N,C,x,y]
+                # Valid only for one class:
+                yb = pred_proba - yb
 
         Xb, yb = super(BatchIterator_boostRegr, self).transform(Xb, yb)
         return Xb, yb
@@ -110,7 +110,6 @@ class boostRegr_routine(object):
     '''
     def __init__(self,convSoftmaxNet,**kwargs):
         info = deepcopy(kwargs)
-        info['logs_path'] = kwargs.pop('logs_path', './logs/')
         # --------------------------
         # Inherited by convSoftmax:
         # --------------------------
@@ -127,9 +126,9 @@ class boostRegr_routine(object):
         # -----------------
         # Own attributes:
         # -----------------
-        self.name = kwargs.pop('name', 'boostRegr')
+        kwargs.setdefault('name', 'boostRegr')
+        self.init_weight = kwargs.pop('init_weight', 1e-3)
         self.batch_size = kwargs.pop('batch_size', 100)
-        self.best_classifier = kwargs.pop('best_classifier', None)
         self.batchShuffle = kwargs.pop('batchShuffle', True)
 
         # -----------------
@@ -155,12 +154,14 @@ class boostRegr_routine(object):
                 'num_filters': self.num_filters1,
                 'filter_size': self.filter_size1,
                 'pad':'same',
+                'W': Normal(std=self.init_weight),
                 'nonlinearity': rectify}),
             (layers.Conv2DLayer, {
                 'name': 'conv2',
                 'num_filters': self.num_classes,
                 'filter_size': self.filter_size1,
                 'pad':'same',
+                'W': Normal(std=self.init_weight),
                 'nonlinearity': final_nonlinearity}),
             # (UpScaleLayer, {'imgShape':self.imgShape}),
         ]
@@ -170,7 +171,7 @@ class boostRegr_routine(object):
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
             objective_loss_function = objective_loss_function,
-            y_tensor_type = T.ftensor3,
+            y_tensor_type = T.ftensor4,
             eval_size=self.eval_size,
             regression = True,
             **kwargs

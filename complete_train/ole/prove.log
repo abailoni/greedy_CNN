@@ -1,0 +1,251 @@
+ERROR:root:Oops:
+Traceback (most recent call last):
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 213, in <module>
+    main()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 208, in main
+    first()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/tuneHyper.py", line 218, in __call__
+    results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 178, in fit_model
+    greedy_routine.train_convSoftmax(net_name, 0, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune,  0)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/greedyNet.py", line 201, in train_convSoftmax
+    self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 125, in fit_naiveRoutine_convSoft
+    net.fit(X_small, y_small, epochs=15)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 539, in fit
+    self.train_loop(X, y, epochs=epochs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 448, in train_loop
+    func(self, self.train_history_, train_outputs) # MOD LINE
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 188, in __call__
+    self._append_results(train_outputs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 198, in _append_results
+    raise Warning("Enough")
+Warning: Enough
+ERROR:root:Oops:
+Traceback (most recent call last):
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 213, in <module>
+    main()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 208, in main
+    first()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/tuneHyper.py", line 218, in __call__
+    results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 178, in fit_model
+    greedy_routine.train_convSoftmax(net_name, 0, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune,  0)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/greedyNet.py", line 201, in train_convSoftmax
+    self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 125, in fit_naiveRoutine_convSoft
+    net.fit(X_small, y_small, epochs=15)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 539, in fit
+    self.train_loop(X, y, epochs=epochs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 448, in train_loop
+    func(self, self.train_history_, train_outputs) # MOD LINE
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 188, in __call__
+    self._append_results(train_outputs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 198, in _append_results
+    raise Warning("Enough")
+Warning: Enough
+ERROR:root:Oops:
+Traceback (most recent call last):
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 213, in <module>
+    main()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 208, in main
+    first()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/tuneHyper.py", line 218, in __call__
+    results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 178, in fit_model
+    greedy_routine.train_convSoftmax(net_name, 0, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune,  0)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/greedyNet.py", line 201, in train_convSoftmax
+    self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 125, in fit_naiveRoutine_convSoft
+    net.fit(X_small, y_small, epochs=15)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 539, in fit
+    self.train_loop(X, y, epochs=epochs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 448, in train_loop
+    func(self, self.train_history_, train_outputs) # MOD LINE
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 188, in __call__
+    self._append_results(train_outputs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 198, in _append_results
+    raise Warning("Enough")
+Warning: Enough
+ERROR:root:Oops:
+Traceback (most recent call last):
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 213, in <module>
+    main()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 208, in main
+    first()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/tuneHyper.py", line 218, in __call__
+    results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 178, in fit_model
+    greedy_routine.train_convSoftmax(net_name, 0, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune,  0)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/greedyNet.py", line 201, in train_convSoftmax
+    self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 125, in fit_naiveRoutine_convSoft
+    net.fit(X_small, y_small, epochs=15)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 539, in fit
+    self.train_loop(X, y, epochs=epochs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 443, in train_loop
+    self.apply_batch_func(self.train_iter_, Xb, yb))
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 687, in apply_batch_func
+    return func(Xb) if yb is None else func(Xb, yb)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/compile/function_module.py", line 879, in __call__
+    storage_map=getattr(self.fn, 'storage_map', None))
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/link.py", line 325, in raise_with_op
+    reraise(exc_type, exc_value, exc_trace)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/compile/function_module.py", line 866, in __call__
+    self.fn() if output_subset is None else\
+MemoryError: Error allocating 1042440000 bytes of device memory (out of memory).
+Apply node that caused the error: GpuAllocEmpty(Shape_i{0}.0, Shape_i{0}.0, Elemwise{Composite{(((i0 + (i1 * (Composite{(((i0 - i1) * i2) + i1)}(i2, i3, i4) // i1))) - Composite{(((i0 - i1) * i2) + i1)}(i2, i3, i4)) + i3)}}[(0, 2)].0, Elemwise{Composite{(((i0 + (i1 * (Composite{(((i0 - i1) * i2) + i1)}(i2, i3, i4) // i1))) - Composite{(((i0 - i1) * i2) + i1)}(i2, i3, i4)) + i3)}}[(0, 2)].0)
+Toposort index: 81
+Inputs types: [TensorType(int64, scalar), TensorType(int64, scalar), TensorType(int64, scalar), TensorType(int64, scalar)]
+Inputs shapes: [(), (), (), ()]
+Inputs strides: [(), (), (), ()]
+Inputs values: [array(20), array(100), array(255), array(511)]
+Outputs clients: [[GpuDnnConv{algo='small', inplace=True}(GpuContiguous.0, GpuContiguous.0, GpuAllocEmpty.0, GpuDnnConvDesc{border_mode='half', subsample=(1, 1), conv_mode='conv', precision='float32'}.0, Constant{1.0}, Constant{0.0})]]
+
+HINT: Re-running with most Theano optimization disabled could give you a back-trace of when this node was created. This can be done with by setting the Theano flag 'optimizer=fast_compile'. If that does not work, Theano optimizations can be disabled with 'optimizer=None'.
+HINT: Use the Theano flag 'exception_verbosity=high' for a debugprint and storage map footprint of this apply node.
+ERROR:root:Oops:
+Traceback (most recent call last):
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 213, in <module>
+    main()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 208, in main
+    first()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/tuneHyper.py", line 218, in __call__
+    results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 178, in fit_model
+    greedy_routine.train_convSoftmax(net_name, 0, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune,  0)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/greedyNet.py", line 202, in train_convSoftmax
+    self.convSoftmax[net_name].activate_nodes()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/convSoftmax.py", line 241, in activate_nodes
+    self.net.initialize()
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 371, in initialize
+    self.y_tensor_type,
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 494, in _create_iter_funcs
+    grads = theano.grad(loss_train, all_params)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 549, in grad
+    grad_dict, wrt, cost_name)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1312, in _populate_grad_dict
+    rval = [access_grad_cache(elem) for elem in wrt]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1267, in access_grad_cache
+    term = access_term_cache(node)[idx]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 961, in access_term_cache
+    output_grads = [access_grad_cache(var) for var in node.outputs]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1267, in access_grad_cache
+    term = access_term_cache(node)[idx]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 961, in access_term_cache
+    output_grads = [access_grad_cache(var) for var in node.outputs]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1267, in access_grad_cache
+    term = access_term_cache(node)[idx]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 961, in access_term_cache
+    output_grads = [access_grad_cache(var) for var in node.outputs]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1267, in access_grad_cache
+    term = access_term_cache(node)[idx]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 961, in access_term_cache
+    output_grads = [access_grad_cache(var) for var in node.outputs]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1267, in access_grad_cache
+    term = access_term_cache(node)[idx]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 961, in access_term_cache
+    output_grads = [access_grad_cache(var) for var in node.outputs]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1267, in access_grad_cache
+    term = access_term_cache(node)[idx]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gradient.py", line 1101, in access_term_cache
+    input_grads = node.op.grad(inputs, new_output_grads)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/tensor/elemwise.py", line 698, in grad
+    rval = self._bgrad(inputs, ograds)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/tensor/elemwise.py", line 812, in _bgrad
+    ret.append(transform(scalar_igrad))
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/tensor/elemwise.py", line 804, in transform
+    *[transform(ipt) for ipt in node.inputs])
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/tensor/elemwise.py", line 804, in transform
+    *[transform(ipt) for ipt in node.inputs])
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/op.py", line 602, in __call__
+    node = self.make_node(*inputs, **kwargs)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/tensor/elemwise.py", line 616, in make_node
+    out_broadcastables)]
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/type.py", line 402, in __call__
+    return utils.add_tag_trace(self.make_variable(name))
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/utils.py", line 108, in add_tag_trace
+    tr = simple_extract_stack(limit=user_line, skips=skips)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/utils.py", line 66, in simple_extract_stack
+    trace.append((filename, lineno, name, line))
+KeyboardInterrupt
+ERROR:root:Oops:
+Traceback (most recent call last):
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 213, in <module>
+    main()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 208, in main
+    first()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/tuneHyper.py", line 218, in __call__
+    results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 178, in fit_model
+    greedy_routine.train_convSoftmax(net_name, 0, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune,  0)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/greedyNet.py", line 202, in train_convSoftmax
+    self.convSoftmax[net_name].activate_nodes()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/convSoftmax.py", line 241, in activate_nodes
+    self.net.initialize()
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 371, in initialize
+    self.y_tensor_type,
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 513, in _create_iter_funcs
+    allow_input_downcast=True,
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/compile/function.py", line 322, in function
+    output_keys=output_keys)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/compile/pfunc.py", line 480, in pfunc
+    output_keys=output_keys)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/compile/function_module.py", line 1787, in orig_function
+    output_keys=output_keys).create(
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/compile/function_module.py", line 1467, in __init__
+    optimizer_profile = optimizer(fgraph)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 102, in __call__
+    return self.optimize(fgraph)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 90, in optimize
+    ret = self.apply(fgraph, *args, **kwargs)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 235, in apply
+    sub_prof = optimizer.optimize(fgraph)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 90, in optimize
+    ret = self.apply(fgraph, *args, **kwargs)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 235, in apply
+    sub_prof = optimizer.optimize(fgraph)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 90, in optimize
+    ret = self.apply(fgraph, *args, **kwargs)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 2257, in apply
+    lopt_change = self.process_node(fgraph, node, lopt)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 1820, in process_node
+    replacements = lopt.transform(node)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/sandbox/cuda/opt.py", line 218, in local_cut_gpu_host_gpu
+    if tensor.opt.opt.check_chain(node, gpu_from_host, host_from_gpu):
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 2571, in check_chain
+    return _check_chain(r, reduce(list.__iadd__, ([x, 0] for x in chain)))
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/theano/gof/opt.py", line 2535, in _check_chain
+    chain = list(reversed(chain))
+KeyboardInterrupt
+ERROR:root:Oops:
+Traceback (most recent call last):
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 213, in <module>
+    main()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 208, in main
+    first()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/tuneHyper.py", line 218, in __call__
+    results.append(self.fit_model(val_dict, "model_%d" %(model_ids[k])))
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 178, in fit_model
+    greedy_routine.train_convSoftmax(net_name, 0, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune,  0)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/greedyNET/nets/greedyNet.py", line 201, in train_convSoftmax
+    self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/test_reg.py", line 125, in fit_naiveRoutine_convSoft
+    net.fit(X_small, y_small, epochs=15)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/nolearn/lasagne/base.py", line 539, in fit
+    self.train_loop(X, y, epochs=epochs)
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 446, in train_loop
+    func(self, self.train_history_, train_outputs) # MOD LINE
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 192, in __call__
+    self._updatePlot()
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/nets/modNeuralNet.py", line 214, in _updatePlot
+    plot_fcts_show(self.iteration_history, [results[:,0]], labels=["Loss"], xyLabels=["Batch iterations", "Quantities"], log="y")
+  File "/net/hciserver03/storage/abailoni/rep/greedy_CNN/mod_nolearn/visualize.py", line 239, in plot_fcts_show
+    axis.set_yscale('log')
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/matplotlib/axes/_base.py", line 3096, in set_yscale
+    self.autoscale_view(scalex=False)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/matplotlib/axes/_base.py", line 2197, in autoscale_view
+    y0, y1 = ylocator.view_limits(y0, y1)
+  File "/export/home/abailoni/miniconda2/envs/env/lib/python2.7/site-packages/matplotlib/ticker.py", line 1613, in view_limits
+    "Data has no positive values, and therefore can not be "
+ValueError: Data has no positive values, and therefore can not be log-scaled.

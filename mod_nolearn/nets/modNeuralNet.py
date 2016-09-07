@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from lasagne.layers import get_all_param_values
 
-from nolearn.lasagne import NeuralNet
+from nolearn.lasagne import NeuralNet, objective
 import mod_nolearn.utils as utils
 
 from mod_nolearn.visualize import plot_fcts_show, plot_fcts
@@ -18,15 +18,22 @@ class AdjustVariable(object):
         self.mode = mode
         self.decay_rate = kwargs.pop('decay_rate', None)
         self.stop = kwargs.setdefault('stop', None)
+        self.iteration = 0
 
     def __call__(self, nn, train_history):
-        epoch = train_history[-1]['epoch']
+        self.iteration += 1
+        # epoch = train_history[-1]['epoch']
+        # Consiously intented not to be the epoch... (if we reset it..)
+        epoch = self.iteration
         if self.stop:
-            if train_history[-1]['epoch']>=nn.max_epochs:
-                epoch = epoch%nn.max_epochs
-            if self.ls is None:
-                self.ls = np.linspace(self.start, self.stop, nn.max_epochs)
-            new_value = utils.float32(self.ls[epoch - 1])
+            # if train_history[-1]['epoch']>=nn.max_epochs:
+            #     epoch = epoch%nn.max_epochs
+            if self.iteration>=nn.max_epochs:
+                new_value = utils.float32(self.ls[-1])
+            else:
+                if self.ls is None:
+                    self.ls = np.linspace(self.start, self.stop, nn.max_epochs)
+                new_value = utils.float32(self.ls[epoch - 1])
             getattr(nn, self.name).set_value(new_value)
         elif self.decay_rate:
             old_value = getattr(nn, self.name).get_value()
@@ -37,6 +44,38 @@ class AdjustVariable(object):
             new_value = utils.float32(new_value)
             getattr(nn, self.name).set_value(new_value)
 
+from lasagne.objectives import aggregate
+from lasagne.layers import get_output
+from lasagne import regularization
+
+class mod_objective(object):
+    def __init__(self,l2=0):
+        self.l2 = l2
+    def __call__(self, layers,
+                  loss_function,
+                  target,
+                  aggregate=aggregate,
+                  deterministic=False,
+                  l1=0,
+                  l2=0,
+                  get_output_kw=None):
+        # Mode:
+        l2 = self.l2
+
+        if get_output_kw is None:
+            get_output_kw = {}
+        output_layer = layers[-1]
+        network_output = get_output(
+            output_layer, deterministic=deterministic, **get_output_kw)
+        loss = aggregate(loss_function(network_output, target))
+
+        if l1:
+            loss += regularization.regularize_layer_params(
+                layers.values(), regularization.l1) * l1
+        if l2:
+            loss += regularization.regularize_layer_params(
+                layers.values(), regularization.l2) * l2
+        return loss
 
 class pickle_model(object):
 
@@ -56,11 +95,12 @@ class pickle_model(object):
         self.epoch = 0
         self.sub_iter = -1
         self.only_best = kwargs.pop('only_best', True)
+        self.logs_path = kwargs.pop('logs_path', 'logs/')
 
     def __call__(self, net, train_history, *args):
         self.iterations += 1
         mode = self.mode
-        filename = self.filename
+        filename = self.logs_path+self.filename
         # basename = filename[:-7] # remove .pickle
 
         if mode=="on_batch_finished":
@@ -72,8 +112,8 @@ class pickle_model(object):
             utils.pickle_model(net, filename)
         elif self.iterations%self.every==0:
             if self.only_best:
-                this_loss = train_history[-1]['train_loss']
-                best_loss = min([h['train_loss'] for h in train_history])
+                this_loss = train_history[-1]['valid_loss']
+                best_loss = min([h['valid_loss'] for h in train_history])
                 if this_loss > best_loss:
                     return
             if mode=="on_epoch_finished":
@@ -87,17 +127,19 @@ from collections import OrderedDict
 # from tabulate import tabulate
 
 class save_train_history(object):
-    def __init__(self, filename, every=1):
+    def __init__(self, filename, every=1, **kwargs):
         self.filename = filename
         self.iterations = 0
         self.every = every
         self.out = []
+        self.logs_path = kwargs.pop('logs_path', 'logs/')
 
     def __call__(self, net, train_history_):
         self.iterations += 1
-        self.out.append(self.new_line(net, train_history_[-1]))
-        if self.iterations%self.every==0:
-            np.savetxt(self.filename, np.array(self.out), fmt='%.8f')
+        if len(train_history_)!=0:
+            self.out.append(self.new_line(net, train_history_[-1]))
+            if self.iterations%self.every==0:
+                np.savetxt(self.logs_path+self.filename, np.array(self.out), fmt='%.8f')
 
 
     def new_line(self, nn, info):
@@ -121,7 +163,10 @@ class save_train_history(object):
             for custom_score in nn.custom_scores:
                 info_tabulate[custom_score[0]] = info[custom_score[0]]
 
-
+        if 'Train IoU' in info:
+            info_tabulate['Train IoU'] = info['Train IoU']
+        if 'Valid IoU' in info:
+            info_tabulate['Valid IoU'] = info['Valid IoU']
         info_tabulate['lrn_rate'] = nn.update_learning_rate.get_value()
         # info_tabulate['update_beta1'] = nn.update_beta1.get_value()
         info_tabulate['dur'] = info['dur']
@@ -137,6 +182,8 @@ class save_subEpoch_history(object):
         self.iterations = 0
         self.results = []
         self.iteration_history = []
+        self.logs_path = kwargs.pop('logs_path', 'logs/')
+
 
     def __call__(self, net, train_history, train_outputs):
         self.iterations += 1
@@ -156,11 +203,11 @@ class save_subEpoch_history(object):
         else:
             results = np.array(train_outputs, dtype=object).T
         average = [np.average(a) for a in results]
-        self.results.append([np.average(a) for a in average])
+        self.results.append(average)
 
     def _write_file(self):
         results = np.array(self.results)
-        np.savetxt(self.filename, results, fmt='%g')
+        np.savetxt(self.logs_path+self.filename, results, fmt='%g')
 
     def _updatePlot(self):
         plt.clf()
@@ -173,6 +220,10 @@ class save_subEpoch_history(object):
         plt.pause(0.001)
 
 class track_weights_distrib(object):
+    '''
+    Change with nice filename...
+    '''
+
     def __init__(self, **kwargs):
         self.every = kwargs.pop('every', None)
         self.layerName = kwargs.pop('layerName', None)
@@ -181,10 +232,12 @@ class track_weights_distrib(object):
         self.iterations = 0
         self.results = []
         self.iteration_history = []
+        self.logs_path = kwargs.pop('logs_path', 'logs/')
+
 
     def _write_file(self):
         results = np.array(self.results)
-        np.savetxt(self.pdfName, results, fmt='%g')
+        np.savetxt(self.logs_path+self.pdfName, results, fmt='%g')
 
 
     def __call__(self, net, *args):
@@ -200,7 +253,7 @@ class track_weights_distrib(object):
         ax = fig.add_subplot(111)
         plot_fcts(ax,self.iteration_history, [results[:,0], results[:,1]], labels=["Mean", "Std deviation"], xyLabels=["Batch iterations", ""])
         fig.set_tight_layout(True)
-        fig.savefig(self.pdfName)
+        fig.savefig(self.logs_path+self.pdfName)
 
 
 def print_weight_distribution(net, layer_name=None):
@@ -222,7 +275,9 @@ def print_weight_distribution(net, layer_name=None):
 
 
 
-
+def check_badLoss(net, train_history):
+    if np.isnan(train_history[-1]['train_loss']) or np.isinf(train_history[-1]['train_loss']):
+        raise StopIteration
 
 
 
@@ -267,17 +322,30 @@ class modNeuralNet(NeuralNet):
     '''
 
     def __init__(self, *args, **kwargs):
+        self.logs_path = kwargs.pop('logs_path', './logs/')
+        self.name = kwargs.pop('name', 'segmNet')
+
+        # Regularization:
+        self.L2 = kwargs.pop('L2', 0)
+        kwargs['objective'] = mod_objective(self.L2)
+
+        # THIS SHOULD BE ALL UPDATED WITH NICE UPDATE METHODS...
+        # E.g.: update pickleModel_mode, then set again content of 'on_something_end'
+
         # Pickle:
         pickleModel_mode = kwargs.pop('pickleModel_mode', None)
-        pickle_filename = kwargs.pop('pickle_filename', None)
+        pickle_filename = kwargs.pop('pickle_filename', self.name+'.pickle')
         pickle_frequency = kwargs.pop('pickle_frequency', 1)
+
         # Logs:
-        log_filename = kwargs.pop('log_filename', None)
-        log_frequency = kwargs.pop('log_frequency', 1)
+        log_frequency = kwargs.pop('log_frequency', None)
+        log_filename = kwargs.pop('log_filename', 'log.txt')
+
         # Sub-epoch logs:
         numIter_subLog = kwargs.pop('numIter_subLog', None)
         subLog_filename = kwargs.pop('subLog_filename', None)
         livePlot = kwargs.pop('livePlot', False)
+
         # Tracking weights:
         trackWeights_freq = kwargs.pop('trackWeights_freq', None)
         trackWeights_layerName = kwargs.pop('trackWeights_layerName', None)
@@ -287,16 +355,45 @@ class modNeuralNet(NeuralNet):
         kwargs.setdefault('on_epoch_finished', [])
         kwargs.setdefault('on_training_finished', [])
         if pickleModel_mode:
-            kwargs[pickleModel_mode] += [pickle_model(pickleModel_mode, pickle_filename, every=pickle_frequency)]
-        if log_filename:
-            kwargs['on_epoch_finished'] += [save_train_history(log_filename, every=log_frequency)]
+            kwargs[pickleModel_mode] += [pickle_model(pickleModel_mode, pickle_filename, every=pickle_frequency, logs_path=self.logs_path)]
+        if log_frequency:
+            kwargs['on_epoch_finished'] += [save_train_history(log_filename, every=log_frequency, logs_path=self.logs_path)]
         if numIter_subLog:
-            kwargs['on_batch_finished'] += [save_subEpoch_history(numIter_subLog,filename=subLog_filename, livePlot=livePlot)]
+            kwargs['on_batch_finished'] += [save_subEpoch_history(numIter_subLog,filename=subLog_filename, livePlot=livePlot, logs_path=self.logs_path)]
         if trackWeights_freq:
-            kwargs['on_batch_finished'] += [track_weights_distrib(layerName=trackWeights_layerName, pdfName=trackWeights_pdfName, every=trackWeights_freq)]
+            kwargs['on_batch_finished'] += [track_weights_distrib(layerName=trackWeights_layerName, pdfName=trackWeights_pdfName, every=trackWeights_freq, logs_path=self.logs_path)]
+
+        # Check when to exit the training loop:
+        kwargs['on_epoch_finished'] += [check_badLoss]
 
 
         super(modNeuralNet, self).__init__(*args, **kwargs)
+
+
+    def update_logs_path(self, new_path):
+        self.logs_path = new_path
+        # List of classes with an attribute logs_path:
+        Classes = (pickle_model, save_train_history, save_subEpoch_history, track_weights_distrib)
+        for fun in self.on_batch_finished+self.on_epoch_finished+self.on_training_finished:
+            if isinstance(fun, Classes):
+                fun.logs_path = new_path
+                # Temporary check for correcting previous shit...
+                if hasattr(fun, 'filename'):
+                    fun.filename = fun.filename.split('/')[-1]
+                if hasattr(fun, 'pdfName'):
+                    fun.pdfName = fun.pdfName.split('/')[-1]
+
+    def update_AdjustObjects(self, new_objects):
+        '''
+        New objects is a list of AdjustVariable instances.
+        '''
+        delete = []
+        for i, fun in enumerate(self.on_epoch_finished):
+            if isinstance(fun, AdjustVariable):
+                delete.append(fun)
+        for fun in delete:
+            self.on_epoch_finished.remove(fun)
+        self.on_epoch_finished += new_objects
 
 
 
@@ -377,6 +474,13 @@ class modNeuralNet(NeuralNet):
             # Each row is one number for each batch. We have np.mean() because one type of data are the scores (no idea why schould we track their avareage...)
             # In other words he's compressing all the informations found in an epoch. Why...?
             # CAREFUL!!!!!! BEFORE THERE IS A TRANSPOSITION, SO BEFORE IT'S THE OPPOSITE!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+            # train_outputs = [
+            #    np.mean(col[-1])
+            #     for col in train_outputs
+            #     ]
+
             train_outputs = [
                 np.average(
                     [np.mean(row) for row in col],

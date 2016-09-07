@@ -141,16 +141,13 @@ class tune_lrn_rate(tune_hyperparams):
         # Init and train net:
         # ----------------------
         greedy_routine = restore_greedyModel('model_725251', 'tuning/tune_first_regr2/')
-        greedy_routine.BASE_PATH_LOG = copy(self.path_out)
-        greedy_routine.update_name(model_name)
-
-        print greedy_routine.net.on_batch_finished
-
+        greedy_routine.update_all_paths(model_name, self.path_out)
         convSoftmax_name = "cnv_L0_G0"
         regr_name = "regr_L0G0N1"
 
         greedy_routine.convSoftmax[convSoftmax_name].insert_weights(greedy_routine.regr[regr_name])
         greedy_routine.train_convSoftmax(convSoftmax_name, fit_naiveRoutine_convSoft, fit_naiveRoutine_convSoft_finetune, 0, 1)
+
         # ----------------------
         # Collect results:
         # ----------------------
