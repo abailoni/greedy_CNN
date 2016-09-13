@@ -1,9 +1,0 @@
-*.pdf
-*.swp
-*.pyc
-.env/*
-*.DS_store
-*.DS_Store
-*.pickle
-*.txt
-._*
