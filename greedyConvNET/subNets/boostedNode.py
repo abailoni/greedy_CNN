@@ -1,21 +1,15 @@
-import time
 import numpy as np
-from copy import deepcopy, copy
+from copy import deepcopy
 import json
 
 from lasagne import layers
-from lasagne.layers import set_all_param_values, get_all_param_values
-import lasagne.init
-from lasagne.nonlinearities import identity, rectify, sigmoid
-from lasagne.objectives import squared_error
-from lasagne.init import HeNormal, Normal
+from lasagne.init import Normal
 import theano.tensor as T
-from mod_nolearn.segmentFcts import pixel_accuracy
 
 
-import mod_nolearn.nets.segmNet as segmNet
-import greedyNET.greedy_utils as greedy_utils
-import mod_nolearn.nets.segmNet as segmNet
+from mod_nolearn.segm.segm_utils import pixel_accuracy, softmax_segm
+from mod_nolearn.segm import segmNeuralNet
+from greedyConvNET import BatchIterator_Greedy
 
 DEFAULT_imgShape = (1024,768)
 
@@ -50,7 +44,7 @@ DEFAULT_imgShape = (1024,768)
 #         # return input_shape[:-1]
 
 
-class BatchIterator_boostRegr(greedy_utils.BatchIterator_Greedy):
+class BatchIterator_boostRegr(BatchIterator_Greedy):
     '''
     It modifies the inputs using the processInput() class.
     Optionally it modifies the targets to fit the residuals (boosting).
@@ -201,11 +195,11 @@ class boostedNode(object):
                 'filter_size': self.filter_size1,
                 'pad':'same',
                 'W': Normal(std=self.init_weight),
-                'nonlinearity': segmNet.softmax_segm}),
+                'nonlinearity': softmax_segm}),
             # (UpScaleLayer, {'imgShape':self.imgShape}),
         ]
 
-        self.net = segmNet.segmNeuralNet(
+        self.net = segmNeuralNet(
             layers=netLayers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,

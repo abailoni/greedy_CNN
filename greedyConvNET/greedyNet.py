@@ -9,18 +9,12 @@ from lasagne.nonlinearities import rectify
 
 import pretr_nets.vgg16 as vgg16
 
-import mod_nolearn.nets.segmNet as segmNet
-import mod_nolearn.segmentFcts as segmentFcts
-from greedyNET.nets.boostedNode import boostedNode
-from greedyNET.nets.boostedNode_ReLU import boostedNode_ReLU
-from greedyNET.nets.greedyLayer import greedyLayer
-from greedyNET.nets.greedyLayer_ReLU import greedyLayer_ReLU
+from mod_nolearn.segm import segmNeuralNet
+import mod_nolearn.segm.segm_utils as segm_utils
 
+from greedyConvNET.subNets import greedyLayer, greedyLayer_ReLU, boostedNode, boostedNode_ReLU
 
-# from greedyNET.greedy_utils import clean_kwargs
-import mod_nolearn.utils as utils
-
-from nolearn.lasagne.visualize import draw_to_file
+import various.utils as utils
 
 
 def restore_greedyModel(model_name, path_logs='./logs/'):
@@ -40,9 +34,9 @@ class greedyRoutine(object):
 
         All the arguments are the usual for nolearn NeuralNet (segmNet)
         '''
-        # ------------------
-        # Compile network:
-        # ------------------
+        # ------------------------------------
+        # Compile network with vgg16 layers:
+        # ------------------------------------
         self.num_layers = 0
         if mod=='basic':
             self.greedy_layer_class = greedyLayer
@@ -60,7 +54,7 @@ class greedyRoutine(object):
         self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
         self.layers = vgg16.nolearn_vgg16_layers()[:self.num_VGG16_layers+1]
         fixed_kwargs = {
-            'objective_loss_function': segmNet.categorical_crossentropy_segm,
+            'objective_loss_function': segm_utils.categorical_crossentropy_segm(),
             'y_tensor_type': T.ltensor3,
             'eval_size': self.eval_size,
             'regression': False,
@@ -69,15 +63,14 @@ class greedyRoutine(object):
         self.net_kwargs = kwargs.copy()
         self.net_kwargs.update(fixed_kwargs)
 
-        self.net = segmNet.segmNeuralNet(
+        self.net = segmNeuralNet(
             layers=self.layers,
-            scores_train=[('trn pixelAcc', segmentFcts.pixel_accuracy)],
-            scores_valid=[('val pixelAcc', segmentFcts.pixel_accuracy)],
+            scores_train=[('trn pixelAcc', segm_utils.pixel_accuracy)],
+            scores_valid=[('val pixelAcc', segm_utils.pixel_accuracy)],
             **self.net_kwargs
         )
 
-        # print "\n\n---------------------------"
-        # print "Compiling inputProcess...\n---------------------------"
+        # print "Compiling inputProcess..."
         # tick = time.time()
         self.net.initialize()
         # tock = time.time()
@@ -257,7 +250,7 @@ class greedyRoutine(object):
 
     def _insert_new_layer(self, net2):
         '''
-        Insert new layer, recompile and insert old weights.
+        Insert new computed layer, recompile and insert old weights.
 
         All parameters are trainable by default.
 
@@ -275,7 +268,7 @@ class greedyRoutine(object):
         # Add new layer:
         # -----------------
         self.num_layers += 1
-        self.layers = self.layers + [
+        self.layers += [
             (layers.Conv2DLayer, {
                 'name': 'conv%d' %(self.num_layers),
                 'num_filters': net2.num_nodes*net2.num_filters1,
@@ -287,7 +280,7 @@ class greedyRoutine(object):
         # ------------------
         # Recompile network:
         # ------------------
-        self.net = segmNet.segmNeuralNet(
+        self.net = segmNeuralNet(
             layers=self.layers,
             **self.net_kwargs
         )
@@ -357,7 +350,7 @@ class greedyRoutine(object):
                      (path_to_pretr_model, train_flag)
                      ('logs/model_A/', True, nodes_trained)
 
-        The third options indicated the pretrained nodes of a convSoftmax subNet.
+        The third options indicates the pretrained nodes of a convSoftmax subNet.
         In particular we have:
                 train = True if active_nodes>load[2] else False
         where the active_nodes are the one in the MAIN part of the net, w/o considering the new node.

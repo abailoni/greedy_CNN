@@ -7,14 +7,13 @@ import json
 
 import theano.tensor as T
 from lasagne import layers
-from lasagne.nonlinearities import rectify, identity, sigmoid
+from lasagne.nonlinearities import rectify, identity
 
-from lasagne.init import HeNormal, GlorotNormal, Normal, Constant
+from lasagne.init import GlorotNormal, Normal, Constant
 
-import greedyNET.greedy_utils as greedy_utils
-import mod_nolearn.nets.segmNet as segmNet
-from mod_nolearn.segmentFcts import pixel_accuracy
-import mod_nolearn.utils as utils
+import mod_nolearn.segm.segm_utils as segm_utils
+from mod_nolearn.segm import segmNeuralNet
+from greedyConvNET import BatchIterator_Greedy
 
 
 class greedyLayer(object):
@@ -67,7 +66,7 @@ class greedyLayer(object):
         self.batchShuffle = kwargs.pop('batchShuffle', True)
         self.active_nodes = 0
 
-        customBatchIterator = greedy_utils.BatchIterator_Greedy(
+        customBatchIterator = BatchIterator_Greedy(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
             previous_layers=self.previous_layers
@@ -122,15 +121,15 @@ class greedyLayer(object):
                 'name': 'boosting_merge'}),
             (layers.NonlinearityLayer,{
                 'incoming': 'boosting_merge',
-                'nonlinearity': segmNet.softmax_segm}),
+                'nonlinearity': segm_utils.softmax_segm}),
         ]
 
-        self.net = segmNet.segmNeuralNet(
+        self.net = segmNeuralNet(
             layers=netLayers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
-            objective_loss_function = segmNet.categorical_crossentropy_segm,
-            scores_train = [('trn pixelAcc', pixel_accuracy)],
+            objective_loss_function = segm_utils.categorical_crossentropy_segm,
+            scores_train = [('trn pixelAcc', segm_utils.pixel_accuracy)],
             # scores_valid = [('val pixelAcc', pixel_accuracy)],
             y_tensor_type = T.ltensor3,
             eval_size=self.eval_size,

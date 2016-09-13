@@ -1,14 +1,63 @@
 import theano.tensor as T
 import numpy as np
-import time
-
-# IT SHOULD (or need to) BE COMPLETELY TRANSLATED INTO THEANO LANGUAGE...
-# (Not numpy arrays, but Theano tensors)
 
 from sklearn.metrics import confusion_matrix
 
+from theano.tensor.nnet import categorical_crossentropy
+from theano.tensor.nnet import softmax
+
+
+# ------------------------------------------------
+# Adapted non-linearities and objective-losses:
+# ------------------------------------------------
+
+# Here the final output is the loss:
+def categorical_crossentropy_segm(prediction_proba, targets):
+    '''
+    MODIFICATIONS:
+        - reshape from image-size to array and back
+    '''
+    shape = T.shape(prediction_proba)
+    pred_mod1 = T.transpose(prediction_proba, (0,2,3,1))
+    pred_mod = T.reshape(pred_mod1, (-1,shape[1]))
+    if prediction_proba.ndim == targets.ndim:
+        targ_mod1 = T.transpose(targets,(0,2,3,1))
+        targ_mod = T.reshape(targ_mod1,(-1,shape[1]))
+    else:
+        targ_mod = T.reshape(targets, (-1,))
+    results = 1. * categorical_crossentropy(pred_mod, targ_mod)
+    results = T.reshape(results, (shape[0],shape[2],shape[3]))
+    return T.sum(results, axis=(1,2))
+
+# This is the non-linearity, giving the probabilities:
+def softmax_segm(x):
+    '''
+    MODIFICATIONS:
+        - reshape from image-size to array and back
+    '''
+    shape = T.shape(x)
+    x_mod = T.transpose(x, (0,2,3,1))
+    x_mod = T.reshape(x_mod, (-1,shape[1]))
+    results = softmax(x_mod)
+    results = T.reshape(results, (shape[0],shape[2],shape[3],shape[1]))
+    return T.transpose(results, (0,3,1,2))
+
+
+
+
+
+# ------------------------------------------------
+# Segmentation-related quantities:
+# ------------------------------------------------
 
 def compute_mean_IoU_logRegr(predictions, targets):
+    '''
+    Compute the Intersection over Union.
+
+    Issues:
+        - Still performing a loop over the batch samples...
+        - Theano implementation missing
+    '''
     predictions = predictions.squeeze()
     N = predictions.shape[0]
     predictions = predictions.reshape((N,-1)).astype(np.int8)
@@ -21,8 +70,10 @@ def compute_mean_IoU_logRegr(predictions, targets):
     return np.mean(IoU)
 
 
-
 class mean_IoU(object):
+    '''
+    Helper class for computing IoU
+    '''
     def __init__(self, X_train, X_valid, y_train, y_valid, **kwargs):
         self.epochs = 0
         self.X_train = X_train
@@ -44,42 +95,12 @@ class mean_IoU(object):
         IoU_val = compute_mean_IoU_logRegr(pred_valid, self.y_valid)
         net.train_history_[-1]['Train IoU'] = IoU_tr
         net.train_history_[-1]['Valid IoU'] = IoU_val
-        # print "Done! (%g sec)" %(time.time()-tick)
 
-
-# # from theano import shared
-# def meanIU(prediction, GrTruth):
-#     '''
-#     Inputs:
-#       - prediction: shape (N, class, dimX, dimY) of float32
-#       - ground truth: shape (N, dimX, dimY) of int32
-
-#     Return averaged Intersection over union for each sample:
-#       - array (N)
-
-#     NOT WORKING, NEEDS THEANO IMPLEMENTATION
-#     '''
-#     N, C = prediction.shape[:2]
-#     predLabels = T.argmax(prediction, axis=1)
-
-#     n_theano = T.itensor3()
-#     n = T.ones_like(n_theano)
-#     # n = shared(0)
-#     # n = np.ones((N,C,C))
-#     for cl in range(C):
-#         # BAD OPTIMIZED, need better implementation ---------------
-#         for i in range(N):
-#             idxs = (T.eq(GrTruth[i],cl)).nonzero()
-#             predClass, numPixels = T.unique(predLabels[i,idxs],return_counts=True)
-#             n[i,cl,predClass] = numPixels
-
-#     diag_n = T.diagonal(n,axis1=1,axis2=2)
-#     meanIU = 1./C * T.sum(diag_n / (n.sum(axis=2)+n.sum(axis=1)-diag_n), axis=1 )
-#     return meanIU
 
 def pixel_accuracy(prediction_proba, GrTruth):
     '''
-    USED FOR A CLASSIFICATION PROBLEM (softmax pixel by pixel)
+    THEANO IMPLEMENTATION OF PIXEL ACCURACY
+    (can be used as training score in nolearn module)
 
     Inputs:
       - prediction_proba: shape (N, class, dimX, dimY) of float32. Should come from a sigmoid or softmax
@@ -102,30 +123,16 @@ def pixel_accuracy(prediction_proba, GrTruth):
 
 def pixel_accuracy_np(prediction, targets):
     '''
-    predictions: ints of shape [N,x,y]
+    Similar to pixel_accuracy(), but implemented in numpy.
+
+    Inputs:
+        - predictions: ints of shape (N,dim_x,dim_y) or float of shape (N,N_classes,dim_x,dim_y)
+        - GrTruth (N,dim_x,dim_y)
 
     '''
+    if len(prediction.shape)==4:
+        prediction = np.argmax(prediction, axis=1)
     right_pixels = np.sum(prediction==targets, axis=(1,2))
     n_pixels = float(targets.shape[1]*targets.shape[2])
     return np.mean(right_pixels/n_pixels)
 
-
-# def pixel_accuracy_sigmoid(prediction, targets):
-#     '''
-#     USED FOR A LOGISTIC REGRESSION PROBLEM (sigmoid pixel by pixel)
-
-#     Inputs:
-#       - prediction: shape (N, dimX, dimY) of float32. Should come from a sigmoid
-#       - ground truth: shape (N, dimX, dimY) of float32 representing GroundTruth or residuals in [0.,1.]
-
-#     Return pixel accuracy [sum(right_pixels)/all_pixels] for each sample:
-#       - array (N)
-
-#     '''
-#     right_pixels = T.sum( T.lt(T.abs_(prediction-targets), 0.5), axis=(1,2))
-#     n_pixels = T.cast(targets.shape[1]*targets.shape[2], 'float32')
-#     return T.mean(right_pixels/n_pixels)
-
-
-# def mean_accuracy(prediction, GrTruth):
-#     ...

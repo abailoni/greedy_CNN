@@ -3,6 +3,7 @@ import numpy as np
 import os
 import shutil
 
+
 def pickle_model(net, filename):
     with open(filename, 'wb') as f:
         pickle.dump(net, f, -1)
@@ -10,6 +11,16 @@ def pickle_model(net, filename):
 def restore_model(filename):
     with open(filename, 'rb') as f:
         return pickle.load(f)
+
+
+def numpy_check(data):
+    return True if isinstance(data, np.ndarray) else False
+
+
+def join_dict(dict1, dict2):
+    new_dict = dict1.copy()
+    new_dict.update(dict2)
+    return new_dict
 
 
 def float32(k):
@@ -47,13 +58,4 @@ def deleteDirectory(path):
         print('Directory not deleted. Error: %s' % e)
 
 
-def check_decay(start, N_epochs, decay_rate, mod='log'):
-    results = np.empty(N_epochs+1)
-    results[0] = start
-    for i in range(N_epochs):
-        old_value = results[i]
-        if mod=='lin':
-            results[i+1] = old_value/(1.+decay_rate*(i+1))
-        elif mod=='log':
-            results[i+1] = old_value*np.exp(-decay_rate*(i+1))
-    return results
+

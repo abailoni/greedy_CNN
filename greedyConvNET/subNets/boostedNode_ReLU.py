@@ -7,11 +7,11 @@ from lasagne.nonlinearities import rectify
 from lasagne.init import Normal
 
 
-from mod_nolearn.segmentFcts import pixel_accuracy
-import mod_nolearn.nets.segmNet as segmNet
+from mod_nolearn.segm.segm_utils import pixel_accuracy, softmax_segm
+from mod_nolearn.segm import segmNeuralNet
 
 
-from greedyNET.nets.boostedNode import BatchIterator_boostRegr, categorical_crossentropy_segm_boost
+from greedyConvNET.subNets.boostedNode import BatchIterator_boostRegr, categorical_crossentropy_segm_boost
 
 
 class boostedNode_ReLU(object):
@@ -102,11 +102,11 @@ class boostedNode_ReLU(object):
                 'filter_size': self.filter_size2,
                 'pad':'same',
                 'W': Normal(std=self.init_weight),
-                'nonlinearity': segmNet.softmax_segm}),
+                'nonlinearity': softmax_segm}),
             # (UpScaleLayer, {'imgShape':self.imgShape}),
         ]
 
-        self.net = segmNet.segmNeuralNet(
+        self.net = segmNeuralNet(
             layers=netLayers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
