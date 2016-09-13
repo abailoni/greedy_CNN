@@ -3,12 +3,30 @@ from time import time
 import numpy as np
 import matplotlib.pyplot as plt
 
+import warnings
+
 from lasagne.layers import get_all_param_values
 
 from nolearn.lasagne import NeuralNet, objective
 import mod_nolearn.utils as utils
 
 from mod_nolearn.visualize import plot_fcts_show, plot_fcts
+
+
+from nolearn.lasagne import BatchIterator
+class BatchIterator_mod(BatchIterator):
+    '''
+    It fixes a bug related to randomization
+    '''
+
+    def __call__(self, X, y=None):
+        if self.shuffle and y is not None:
+            self._shuffle_arrays([X, y] if y is not None else [X], self.random)
+        self.X, self.y = X, y
+        return self
+
+
+
 
 class AdjustVariable(object):
     def __init__(self, name, start=0.03, mode='linear', **kwargs):
@@ -51,6 +69,7 @@ from lasagne import regularization
 class mod_objective(object):
     def __init__(self,l2=0):
         self.l2 = l2
+
     def __call__(self, layers,
                   loss_function,
                   target,
@@ -186,6 +205,11 @@ class save_subEpoch_history(object):
 
 
     def __call__(self, net, train_history, train_outputs):
+        '''
+        train_outputs is a list with dimension:
+            (N_iterations, N_quantities)
+        and each element is an array (of one or more values).
+        '''
         self.iterations += 1
         if self.iterations%self.every==0 and len(train_outputs)>1:
             self.iteration_history.append(self.iterations)
@@ -202,6 +226,7 @@ class save_subEpoch_history(object):
             results = np.array(train_outputs[-self.every:], dtype=object).T
         else:
             results = np.array(train_outputs, dtype=object).T
+        # Averaging over iterations: (results.shape=(quantities,iterations))
         average = [np.average(a) for a in results]
         self.results.append(average)
 
@@ -215,7 +240,7 @@ class save_subEpoch_history(object):
         # train_scores = np.array(self.train_scores)
         plt.ion()
         plt.show()
-        plot_fcts_show(self.iteration_history, [results[:,0]], labels=["Loss"], xyLabels=["Batch iterations", "Quantities"], log="y")
+        plot_fcts_show(self.iteration_history, [results[:,0]], labels=["Loss"], xyLabels=["Batch iterations", "Quantities"], log="")
         plt.draw()
         plt.pause(0.001)
 
@@ -275,9 +300,15 @@ def print_weight_distribution(net, layer_name=None):
 
 
 
-def check_badLoss(net, train_history):
-    if np.isnan(train_history[-1]['train_loss']) or np.isinf(train_history[-1]['train_loss']):
+
+
+def check_badLoss(net, train_history, train_outputs):
+    if np.isnan(train_outputs[-1][0]) or np.isinf(train_outputs[-1][0]):
+        warnings.warn("Training stopped, infinite loss")
         raise StopIteration
+    # if np.isnan(train_history[-1]['train_loss']) or np.isinf(train_history[-1]['train_loss']):
+    #     warnings.warn("Training stopped, infinite loss")
+    #     raise StopIteration
 
 
 
@@ -326,8 +357,10 @@ class modNeuralNet(NeuralNet):
         self.name = kwargs.pop('name', 'segmNet')
 
         # Regularization:
-        self.L2 = kwargs.pop('L2', 0)
-        kwargs['objective'] = mod_objective(self.L2)
+        if not hasattr(self, 'L2'):
+            self.L2 = kwargs.pop('L2', 0)
+            if self.L2:
+                kwargs['objective'] = mod_objective(self.L2)
 
         # THIS SHOULD BE ALL UPDATED WITH NICE UPDATE METHODS...
         # E.g.: update pickleModel_mode, then set again content of 'on_something_end'
@@ -364,7 +397,7 @@ class modNeuralNet(NeuralNet):
             kwargs['on_batch_finished'] += [track_weights_distrib(layerName=trackWeights_layerName, pdfName=trackWeights_pdfName, every=trackWeights_freq, logs_path=self.logs_path)]
 
         # Check when to exit the training loop:
-        kwargs['on_epoch_finished'] += [check_badLoss]
+        kwargs['on_batch_finished'] += [check_badLoss]
 
 
         super(modNeuralNet, self).__init__(*args, **kwargs)
@@ -395,7 +428,17 @@ class modNeuralNet(NeuralNet):
             self.on_epoch_finished.remove(fun)
         self.on_epoch_finished += new_objects
 
-
+    def loss(self, X, y):
+        '''
+        Takes some data and return the averaged loss.
+        '''
+        valid_outputs, batch_valid_sizes = [], []
+        for Xb, yb in self.batch_iterator_test(X,y):
+                valid_outputs.append(
+                    self.apply_batch_func(self.eval_iter_, Xb, yb))
+                batch_valid_sizes.append(len(Xb))
+        valid_outputs = np.array(valid_outputs, dtype=object).T
+        return np.average( [np.mean(row) for row in valid_outputs[0]]  , weights=batch_valid_sizes)
 
     def train_loop(self, X, y, epochs=None):
         '''
@@ -448,12 +491,15 @@ class modNeuralNet(NeuralNet):
             t0 = time()
 
             batch_train_sizes = []
-            for Xb, yb in self.batch_iterator_train(X_train, y_train):
-                train_outputs.append(
-                    self.apply_batch_func(self.train_iter_, Xb, yb))
-                batch_train_sizes.append(len(Xb))
-                for func in on_batch_finished:
-                    func(self, self.train_history_, train_outputs) # MOD LINE
+            try: ### MOD
+                for Xb, yb in self.batch_iterator_train(X_train, y_train):
+                    train_outputs.append(
+                        self.apply_batch_func(self.train_iter_, Xb, yb))
+                    batch_train_sizes.append(len(Xb))
+                    for func in on_batch_finished:
+                        func(self, self.train_history_, train_outputs) # MOD LINE
+            except StopIteration:
+                break ### MOD
 
             batch_valid_sizes = []
             for Xb, yb in self.batch_iterator_test(X_valid, y_valid):
@@ -467,19 +513,8 @@ class modNeuralNet(NeuralNet):
                             self.custom_scores, custom_scores):
                         custom_score.append(custom_scorer[1](yb, y_prob))
 
+            # Check sublogs for details about train_outputs
             train_outputs = np.array(train_outputs, dtype=object).T
-
-            # Here each col contains one type of results (for training we have
-            # [loss_train, scores_train]).
-            # Each row is one number for each batch. We have np.mean() because one type of data are the scores (no idea why schould we track their avareage...)
-            # In other words he's compressing all the informations found in an epoch. Why...?
-            # CAREFUL!!!!!! BEFORE THERE IS A TRANSPOSITION, SO BEFORE IT'S THE OPPOSITE!!!!!!!!!!!!!!!!!!!!!!!!
-
-
-            # train_outputs = [
-            #    np.mean(col[-1])
-            #     for col in train_outputs
-            #     ]
 
             train_outputs = [
                 np.average(

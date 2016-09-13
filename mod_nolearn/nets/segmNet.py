@@ -39,11 +39,11 @@ def categorical_crossentropy_segm(prediction_proba, targets):
     shape = T.shape(prediction_proba)
     pred_mod1 = T.transpose(prediction_proba, (0,2,3,1))
     pred_mod = T.reshape(pred_mod1, (-1,shape[1]))
-    # if prediction_proba.ndim == targets.ndim:
-    #     targ_mod1 = T.transpose(targets,(0,2,3,1))
-    #     targ_mod = T.reshape(targ_mod1,(-1,shape[1]))
-    # else:
-    targ_mod = T.reshape(targets, (-1,))
+    if prediction_proba.ndim == targets.ndim:
+        targ_mod1 = T.transpose(targets,(0,2,3,1))
+        targ_mod = T.reshape(targ_mod1,(-1,shape[1]))
+    else:
+        targ_mod = T.reshape(targets, (-1,))
     results = 1. * categorical_crossentropy(pred_mod, targ_mod)
     results = T.reshape(results, (shape[0],shape[2],shape[3]))
     return T.sum(results, axis=(1,2))

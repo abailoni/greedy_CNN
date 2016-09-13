@@ -4,8 +4,6 @@ from tabulate import tabulate
 import json
 import os
 
-import mod_nolearn.utils as utils
-import mod_nolearn.visualize as vis
 
 def scatter_plot(folder, tun_ID=None, quantity=None, exclude=None):
     '''
@@ -51,6 +49,12 @@ def scatter_plot(folder, tun_ID=None, quantity=None, exclude=None):
 
     # Delele NaN:
     nan_indx = (np.isnan(all_data[:,3])).nonzero()
+    data_indx = np.logical_not(np.isnan(all_data[:,3])).nonzero()
+    nan_data = np.delete(all_data,data_indx,axis=0)
+    nan_input_x = nan_data[:,1]
+    nan_input_y = nan_data[:,2]
+
+
     all_data = np.delete(all_data,nan_indx,axis=0)
 
 
@@ -75,8 +79,10 @@ def scatter_plot(folder, tun_ID=None, quantity=None, exclude=None):
         marker_size = 100
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        s = ax.scatter(input_x, input_y, marker_size, c=result, cmap='Greys')
-        ax.scatter(input_x[:1], input_y[:1], marker_size, c=result[:1], cmap='autumn')
+        ax.scatter(input_x[:1], input_y[:1], s=marker_size+100, c=result[:1], cmap='autumn', alpha=0.8, edgecolor='r', marker=(4, 0))
+        s = ax.scatter(input_x, input_y, s=marker_size, c=result, cmap='jet') #Greys
+        ax.scatter(nan_input_x, nan_input_y, marker_size, marker='x')
+
         fig.colorbar(s)
 
         ax.set_xlim([x_min,x_max])
@@ -146,6 +152,7 @@ def compare_stuff(folder, collect_function, quantity, tun_ID=None, exclude=None,
     models = all_data[:,0]
 
     outputs = [ collect_function(model, quantity, info_files[0]['path_out']) for model in models]
+    N = all_data.shape[0]
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
@@ -169,6 +176,10 @@ def analyse_model(folder, collect_function, quantities, model_ID, plot_kwargs={}
     # vis.plot_fcts_show(axis, x, ys,     )
     fig.savefig(folder+'/model_%d/plot_%s.pdf' %(model_ID, quantities[0]))
 
+
+
+import mod_nolearn.utils as utils
+import mod_nolearn.visualize as vis
 
 
 class tune_hyperparams(object):
