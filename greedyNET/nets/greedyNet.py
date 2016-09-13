@@ -1,5 +1,5 @@
 import time
-from copy import copy, deepcopy
+from copy import deepcopy
 
 import theano.tensor as T
 import lasagne.layers as layers
@@ -11,8 +11,12 @@ import pretr_nets.vgg16 as vgg16
 
 import mod_nolearn.nets.segmNet as segmNet
 import mod_nolearn.segmentFcts as segmentFcts
-import greedyNET.nets.boostRegr as boostRegr
-import greedyNET.nets.convSoftmax as convSoftmax
+from greedyNET.nets.boostedNode import boostedNode
+from greedyNET.nets.boostedNode_ReLU import boostedNode_ReLU
+from greedyNET.nets.greedyLayer import greedyLayer
+from greedyNET.nets.greedyLayer_ReLU import greedyLayer_ReLU
+
+
 # from greedyNET.greedy_utils import clean_kwargs
 import mod_nolearn.utils as utils
 
@@ -24,7 +28,7 @@ def restore_greedyModel(model_name, path_logs='./logs/'):
     return utils.restore_model(path_logs+model_name+'/model.pickle')
 
 class greedyRoutine(object):
-    def __init__(self, num_VGG16_layers, **kwargs):
+    def __init__(self, num_VGG16_layers, mod=None, **kwargs):
         '''
         Initialize a network that uses just the first layers of VGG16.
 
@@ -40,6 +44,15 @@ class greedyRoutine(object):
         # Compile network:
         # ------------------
         self.num_layers = 0
+        if mod=='basic':
+            self.greedy_layer_class = greedyLayer
+            self.boosted_node_class = boostedNode
+        elif mod=='ReLU':
+            self.greedy_layer_class = greedyLayer_ReLU
+            self.boosted_node_class = boostedNode_ReLU
+        else:
+            raise ValueError("A mode is required. Accepted types: 'basic', 'ReLU'")
+
         self.num_VGG16_layers = int(num_VGG16_layers)
         self.eval_size =  kwargs.pop('eval_size',0.)
         self.model_name = kwargs.pop('model_name', 'greedyNET')
@@ -86,19 +99,27 @@ class greedyRoutine(object):
     def train_new_layer(self, (fit_routine_regr, num_regr, kwargs_regr) , (fit_routine_net2, num_net2, kwargs_convSoftmax), finetune_routine_net2, adjust_convSoftmax=None):
 
         # ------------------------------------------------
-        # Parallelized loop: (not working for the moment)
+        # Parallelized loop: (serialized for the moment)
         # ------------------------------------------------
-        self.best_classifier = {}
         Nets2 = []
         for idx_net2 in range(num_net2):
             # -------------------------------------------
             # Fit first node and initialize convSoftmax:
             # -------------------------------------------
-            group_label = "group_%d" %idx_net2
             convSoftmax_name = "cnv_L%d_G%d"%(self.num_layers,idx_net2)
             self.init_convSoftmax(convSoftmax_name, kwargs_convSoftmax, num_regr)
-            self.train_convSoftmax(convSoftmax_name, idx_net2, fit_routine_net2, finetune_routine_net2,  0)
-            self.best_classifier[group_label] = self.convSoftmax[convSoftmax_name].net
+
+            regr_name = "regr_L%dG%dN%d" %(self.num_layers,idx_net2,0)
+            self.init_regr(regr_name, kwargs_regr, convSoftmax_name)
+            train_flag = self.train_regr(regr_name,  fit_routine_regr, idx_net2, 0)
+            # train_flag = True
+
+
+            # Check if first node was trained or it was loaded
+            # but not inserted in the main net:
+            if train_flag or self.convSoftmax[convSoftmax_name].net.layers_['mask'].first_iteration:
+                self.convSoftmax[convSoftmax_name].insert_weights(self.regr[regr_name])
+            # self.train_convSoftmax(convSoftmax_name, idx_net2, fit_routine_net2, finetune_routine_net2,  0)
 
             # -----------------------------------------
             # Boosting loop:
@@ -107,14 +128,17 @@ class greedyRoutine(object):
                 # Fit new regression to residuals:
                 regr_name = "regr_L%dG%dN%d" %(self.num_layers,idx_net2,num_node)
                 self.init_regr(regr_name, kwargs_regr, convSoftmax_name)
+
                 train_flag = self.train_regr(regr_name,  fit_routine_regr, idx_net2, num_node)
+                # train_flag=True
+
                 # Insert in convSoftmax:
-                if train_flag:
+                if train_flag or self.check_insert_weights(convSoftmax_name, num_node):
                     self.convSoftmax[convSoftmax_name].insert_weights(self.regr[regr_name])
 
-                # Call external function to adjust parameters:
-                if adjust_convSoftmax:
-                    self.convSoftmax[convSoftmax_name] = adjust_convSoftmax(self.convSoftmax[convSoftmax_name])
+                # # Call external function to adjust parameters:
+                # if adjust_convSoftmax:
+                #     self.convSoftmax[convSoftmax_name] = adjust_convSoftmax(self.convSoftmax[convSoftmax_name])
 
                 # Retrain:
                 self.train_convSoftmax(convSoftmax_name, idx_net2, fit_routine_net2, finetune_routine_net2, num_node)
@@ -123,7 +147,19 @@ class greedyRoutine(object):
 
         # Add new layer:
         self._insert_new_layer(Nets2[0])
-        # self.pickle_greedyNET()
+        self.pickle_greedyNET()
+
+
+    def check_insert_weights(self, net_name, active_nodes):
+        # Really bad repetition of code... BUT THERE IS MOD IN SIGN!
+        insert_weights = True
+        if net_name in self.preLoad:
+            load = self.preLoad[net_name]
+            insert_weights = load[1]
+            if len(load)==3:
+                print active_nodes, load[2]
+                insert_weights = True if active_nodes>=load[2] else False #MOD
+        return insert_weights
 
     def init_regr(self, net_name, kwargs, convSoftmax_name):
         # If not pretrained, initialize new network:
@@ -139,7 +175,7 @@ class greedyRoutine(object):
             params['trackWeights_pdfName'] = 'weights.txt'
             params['logs_path'] = logs_path
 
-            self.regr[net_name] = boostRegr.boostRegr_routine(
+            self.regr[net_name] = self.boosted_node_class(
                 self.convSoftmax[convSoftmax_name],
                 **params
             )
@@ -157,7 +193,7 @@ class greedyRoutine(object):
             params['trackWeights_pdfName'] = 'weights.txt'
             params['pickle_filename'] = 'model.pickle'
             params['logs_path'] = logs_path
-            self.convSoftmax[net_name] = convSoftmax.convSoftmax_routine(
+            self.convSoftmax[net_name] = self.greedy_layer_class(
                 self.net,
                 self.output_channels,
                 num_nodes=num_nodes,
@@ -173,8 +209,9 @@ class greedyRoutine(object):
         # Train subNet:
         if train:
             print "\n\n----------------------------------------------------"
-            print "TRAINING regression - Layer %d, group %d, node %d" %(self.num_layers,idx_net2,num_node)
+            print "TRAINING Boosted Softmax - Layer %d, group %d, node %d" %(self.num_layers,idx_net2,num_node)
             print "----------------------------------------------------\n\n"
+            self.regr[net_name].net.first_node = True if num_node==0 else False
             self.regr[net_name].net = fit_routine(self.regr[net_name].net)
             self.post_Training(net_name)
 
@@ -193,18 +230,18 @@ class greedyRoutine(object):
         # Train subNet:
         if train:
             print "\n\n--------------------------------------------------------"
-            print "TRAINING softmax - Layer %d, group %d, %d active nodes" %(self.num_layers,idx_net2,active_nodes)
+            print "FINE-TUNING Softmax - Layer %d, group %d, active nodes %d " %(self.num_layers,idx_net2,active_nodes)
             print "--------------------------------------------------------\n\n"
-            if active_nodes!=0:
-                self.convSoftmax[net_name].deactivate_nodes_BOOST()
+            # if active_nodes!=0:
+            #     self.convSoftmax[net_name].deactivate_nodes()
             if fit_routine:
-                print "Tuning new node:"
+                # print "Tuning new node:"
                 self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
-            if active_nodes!=0:
-                self.convSoftmax[net_name].activate_nodes_BOOST()
-            if finetune_routine:
-                print "\nFinetuning all second layer until last node:"
-                self.convSoftmax[net_name].net = finetune_routine(self.convSoftmax[net_name].net)
+            # if active_nodes!=0:
+            #     self.convSoftmax[net_name].activate_nodes()
+            # if finetune_routine:
+            #     print "\nFinetuning all second layer until last node:"
+            #     self.convSoftmax[net_name].net = finetune_routine(self.convSoftmax[net_name].net)
             self.post_Training(net_name)
 
 
@@ -216,7 +253,7 @@ class greedyRoutine(object):
             utils.pickle_model(self.convSoftmax[net_name],self.BASE_PATH_LOG_MODEL+net_name+'/routine.pickle')
         elif 'reg' in net_name:
             utils.pickle_model(self.regr[net_name],self.BASE_PATH_LOG_MODEL+net_name+'/routine.pickle')
-        # self.pickle_greedyNET()
+        self.pickle_greedyNET()
 
     def _insert_new_layer(self, net2):
         '''
@@ -346,9 +383,9 @@ class greedyRoutine(object):
                 else:
                     raise ValueError("Not recognized netname")
                 # Delete possible previous folders:
-                utils.deleteDirectory(subNet_new_path)
+                utils.deleteDirectory(subNet_new_path[:-1])
                 # Copy old subNet:
-                utils.create_dir(subNet_new_path)
+                # utils.create_dir(subNet_new_path)
                 utils.copyDirectory(subNet_old_path, subNet_new_path)
 
         self._update_subNets_paths()
