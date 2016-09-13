@@ -11,7 +11,7 @@ from mod_nolearn.segm.segm_utils import pixel_accuracy, softmax_segm
 from mod_nolearn.segm import segmNeuralNet
 
 
-from greedyConvNET.subNets.boostedNode import BatchIterator_boostRegr, categorical_crossentropy_segm_boost
+from greedy_convnet.sub_nets.boostedNode import BatchIterator_boostRegr, categorical_crossentropy_segm_boost
 
 
 class boostedNode_ReLU(object):

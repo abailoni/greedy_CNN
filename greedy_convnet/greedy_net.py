@@ -12,7 +12,7 @@ import pretr_nets.vgg16 as vgg16
 from mod_nolearn.segm import segmNeuralNet
 import mod_nolearn.segm.segm_utils as segm_utils
 
-from greedyConvNET.subNets import greedyLayer, greedyLayer_ReLU, boostedNode, boostedNode_ReLU
+from greedy_convnet.sub_nets import greedyLayer, greedyLayer_ReLU, boostedNode, boostedNode_ReLU
 
 import various.utils as utils
 
@@ -21,7 +21,7 @@ def restore_greedyModel(model_name, path_logs='./logs/'):
     # After this, if you rename the model, you should call the method update_all_paths.
     return utils.restore_model(path_logs+model_name+'/model.pickle')
 
-class greedyRoutine(object):
+class greedyNet(object):
     def __init__(self, num_VGG16_layers, mod=None, **kwargs):
         '''
         Initialize a network that uses just the first layers of VGG16.
@@ -54,7 +54,7 @@ class greedyRoutine(object):
         self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
         self.layers = vgg16.nolearn_vgg16_layers()[:self.num_VGG16_layers+1]
         fixed_kwargs = {
-            'objective_loss_function': segm_utils.categorical_crossentropy_segm(),
+            'objective_loss_function': segm_utils.categorical_crossentropy_segm,
             'y_tensor_type': T.ltensor3,
             'eval_size': self.eval_size,
             'regression': False,

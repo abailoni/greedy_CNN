@@ -13,9 +13,9 @@ from lasagne.init import Normal
 
 import mod_nolearn.segm.segm_utils as segm_utils
 from mod_nolearn.segm import segmNeuralNet
-from greedyConvNET import BatchIterator_Greedy
+from greedy_convnet import BatchIterator_Greedy
 
-from greedyNET.nets.greedyLayer import MaskLayer
+from greedy_convnet.sub_nets.greedyLayer import MaskLayer
 
 class greedyLayer_ReLU(object):
     '''

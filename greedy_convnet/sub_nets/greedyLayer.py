@@ -13,7 +13,7 @@ from lasagne.init import GlorotNormal, Normal, Constant
 
 import mod_nolearn.segm.segm_utils as segm_utils
 from mod_nolearn.segm import segmNeuralNet
-from greedyConvNET import BatchIterator_Greedy
+from greedy_convnet import BatchIterator_Greedy
 
 
 class greedyLayer(object):

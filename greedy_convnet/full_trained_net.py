@@ -1,8 +1,7 @@
-import numpy as np
 from copy import deepcopy
 import json
 
-from lasagne.init import HeNormal, Normal
+from lasagne.init import Normal
 import theano.tensor as T
 from lasagne import layers
 from lasagne.nonlinearities import rectify
@@ -11,13 +10,13 @@ from lasagne.nonlinearities import rectify
 import pretr_nets.vgg16 as vgg16
 
 
-import mod_nolearn.utils as utils
-from mod_nolearn.nets.modNeuralNet import BatchIterator_mod
-import mod_nolearn.nets.segmNet as segmNet
-import mod_nolearn.segmentFcts as segmentFcts
+import various.utils as utils
+from mod_nolearn import BatchIterator
+from mod_nolearn.segm import segmNeuralNet
+import mod_nolearn.segm.segm_utils as segm_utils
 
 
-class fullNet(object):
+class fullTrainedNet(object):
     def __init__(self,num_VGG16_layers,num_conv_layers,**kwargs):
         info = deepcopy(kwargs)
         # -----------------
@@ -46,7 +45,7 @@ class fullNet(object):
         self.batchShuffle = kwargs.pop('batchShuffle', True)
         self.active_nodes = 0
 
-        customBatchIterator = BatchIterator_mod(
+        customBatchIterator = BatchIterator(
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
         )
@@ -70,15 +69,15 @@ class fullNet(object):
                 'filter_size': self.filter_size,
                 'W': Normal(std=self.init_weight),
                 'pad':'same',
-                'nonlinearity': segmNet.softmax_segm}),
+                'nonlinearity': segm_utils.softmax_segm}),
         ]
 
-        self.net = segmNet.segmNeuralNet(
+        self.net = segmNeuralNet(
             layers=self.layers,
             batch_iterator_train = customBatchIterator,
             batch_iterator_test = customBatchIterator,
-            objective_loss_function = segmNet.categorical_crossentropy_segm,
-            scores_train = [('trn pixelAcc', segmentFcts.pixel_accuracy)],
+            objective_loss_function = segm_utils.categorical_crossentropy_segm,
+            scores_train = [('trn pixelAcc', segm_utils.pixel_accuracy)],
             # scores_valid = [('val pixelAcc', pixel_accuracy_sigmoid)],
             y_tensor_type = T.ltensor3,
             eval_size=self.eval_size,

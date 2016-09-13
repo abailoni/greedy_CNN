@@ -9,7 +9,8 @@ import theano.tensor as T
 
 from mod_nolearn.segm.segm_utils import pixel_accuracy, softmax_segm
 from mod_nolearn.segm import segmNeuralNet
-from greedyConvNET import BatchIterator_Greedy
+from greedy_convnet import BatchIterator_Greedy
+
 
 DEFAULT_imgShape = (1024,768)
 

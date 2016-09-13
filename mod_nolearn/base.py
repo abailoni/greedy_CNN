@@ -14,7 +14,7 @@ from mod_nolearn.nolearn_utils import *
 
 
 
-class BatchIterator_mod(BatchIterator):
+class modBatchIterator(BatchIterator):
     '''
     It fixes a bug related to randomization
     '''
@@ -26,7 +26,7 @@ class BatchIterator_mod(BatchIterator):
 
 
 
-class mod_objective(object):
+class modObjective(object):
     def __init__(self,l2=0):
         self.l2 = l2
 
@@ -113,7 +113,7 @@ class modNeuralNet(NeuralNet):
         if not hasattr(self, 'L2'):
             self.L2 = kwargs.pop('L2', 0)
             if self.L2:
-                kwargs['objective'] = mod_objective(self.L2)
+                kwargs['objective'] = modObjective(self.L2)
 
 
         # Pickle:

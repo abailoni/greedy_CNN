@@ -1,7 +1,7 @@
-from modNeuralNet import modNeuralNet as NeuralNet
-from modNeuralNet import BatchIterator_mod as BatchIterator
-from modNeuralNet import mod_objective as objective
+from base import modNeuralNet as NeuralNet
+from base import modBatchIterator as BatchIterator
+from base import modObjective as objective
 
-from tuneHyperParams import tuneHyperParams
+from tune_hyperparams import tuneHyperParams
 
 __all__ = ['modNeuralNet', 'nolearn_utils', 'tuneHyperParams']
