@@ -1,4 +1,4 @@
-from nolearn.lasagne import BatchIterator
+from mod_nolearn.nets.modNeuralNet import BatchIterator_mod
 
 def clean_kwargs(kwargs):
     for key in ['on_epoch_finished', 'on_training_finished', 'on_batch_finished']:
@@ -8,7 +8,7 @@ def clean_kwargs(kwargs):
 
 
 
-class BatchIterator_Greedy(BatchIterator):
+class BatchIterator_Greedy(BatchIterator_mod):
     '''
     It modifies the inputs using the previous_layers() class.
 
