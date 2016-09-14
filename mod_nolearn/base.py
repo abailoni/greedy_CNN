@@ -59,6 +59,69 @@ class modObjective(object):
 
 
 
+from sklearn.cross_validation import KFold
+from sklearn.cross_validation import StratifiedKFold
+
+def _sldict(arr, sl):
+    if isinstance(arr, dict):
+        return {k: v[sl] for k, v in arr.items()}
+    else:
+        return arr[sl]
+
+class modTrainSplit(object):
+    '''
+    Accepted modes:
+        'standard': the sklearn cross-validation tool is used
+        'proportion': the vectors are divided depending on the proportion eval_size
+    '''
+    def __init__(self, eval_size, stratify=True, mode='proportion'):
+        self.mode = mode
+        self.eval_size = eval_size
+        self.stratify = stratify
+
+    def __call__(self, X, y, net):
+        if self.eval_size:
+            if self.mode=='standard':
+                if net.regression or not self.stratify:
+                    kf = KFold(y.shape[0], round(1. / self.eval_size))
+                else:
+                    kf = StratifiedKFold(y, round(1. / self.eval_size))
+
+                train_indices, valid_indices = next(iter(kf))
+                print train_indices, valid_indices
+                X_train, y_train = _sldict(X, train_indices), y[train_indices]
+                X_valid, y_valid = _sldict(X, valid_indices), y[valid_indices]
+            elif self.mode=='proportion':
+                N = X.shape[0]
+                train_slice = slice(round(N*(1-self.eval_size)))
+                valid_slice = slice(round(N*(1-self.eval_size)), None)
+                print train_slice, valid_slice
+                X_train, y_train = _sldict(X, train_slice), y[train_slice]
+                X_valid, y_valid = _sldict(X, valid_slice), y[valid_slice]
+            else:
+                raise ValueError("An unknown mode was passed to TrainSplit. Accepted: 'standard' or 'proportion'" )
+
+        else:
+            X_train, y_train = X, y
+            X_valid, y_valid = _sldict(X, slice(len(y), None)), y[len(y):]
+
+        if len(X_train.shape)==3:
+            X_train = X_train.expand_dims(axis=0)
+            y_train = y_train.expand_dims(axis=0)
+        if len(X_valid.shape)==3:
+            X_valid = X_valid.expand_dims(axis=0)
+            y_valid = y_valid.expand_dims(axis=0)
+        print X_train.shape
+        print X_valid.shape
+        return X_train, X_valid, y_train, y_valid
+
+
+
+
+
+
+
+
 class modNeuralNet(NeuralNet):
     '''
     Modified version of NeuralNet (nolearn).

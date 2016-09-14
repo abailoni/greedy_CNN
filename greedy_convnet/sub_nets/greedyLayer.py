@@ -43,15 +43,13 @@ class greedyLayer(object):
         self.init_weight = kwargs.pop('init_weight', 1e-3)
         self.filter_size1 = kwargs.pop('filter_size1', 7)
         self.filter_size2 = kwargs.pop('filter_size2', 7)
-        self.num_filters1 = 2
+        self.num_classes = kwargs.pop('num_classes', 2)
+        self.num_filters1 = self.num_classes
         self.input_filters = input_filters
         self.previous_layers = previous_layers
-        self.num_classes = 2
         self.xy_input = kwargs.pop('xy_input', (None, None))
         self.eval_size = kwargs.pop('eval_size', 0.1)
         # Checks:
-        if "num_classes" in kwargs:
-            raise ValueError('Multy-class classification boosting not implemented for the moment. "num_classes" parameter is fixed to 2')
         if "train_split" in kwargs:
             raise ValueError('The option train_split is not used. Use eval_size instead.')
 

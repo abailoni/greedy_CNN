@@ -46,7 +46,7 @@ class greedyLayer_ReLU(object):
         self.init_weight = kwargs.pop('init_weight', 1e-3)
         self.filter_size1 = kwargs.pop('filter_size1', 7)
         self.filter_size2 = kwargs.pop('filter_size2', 7)
-        self.num_filters1 = kwargs.pop('num_filters1', 2)
+        self.num_filters1 = kwargs.pop('num_filters1', 5)
         self.input_filters = input_filters
         self.previous_layers = previous_layers
         self.num_classes = kwargs.pop('num_classes', 2)

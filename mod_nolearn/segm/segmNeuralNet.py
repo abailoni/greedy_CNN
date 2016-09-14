@@ -1,7 +1,12 @@
-from nolearn.lasagne.base import TrainSplit
+from mod_nolearn import TrainSplit
 
 from mod_nolearn import NeuralNet
 from mod_nolearn.segm.segm_utils import categorical_crossentropy_segm
+
+
+
+
+
 
 
 class segmNeuralNet(NeuralNet):

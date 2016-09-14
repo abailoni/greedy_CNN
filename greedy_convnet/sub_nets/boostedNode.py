@@ -161,6 +161,10 @@ class boostedNode(object):
         self.eval_size = convSoftmaxNet.eval_size
         self.best_classifier = convSoftmaxNet.net if not convSoftmaxNet.net.layers_['mask'].first_iteration else None
 
+        if 'eval_size' in kwargs:
+            if kwargs['eval_size']!=self.eval_size:
+                raise ValueError("A different value of eval_size was passed to the boosted node, as compared to the value of the greedyLayer")
+
         # -----------------
         # Own attributes:
         # -----------------
@@ -207,7 +211,6 @@ class boostedNode(object):
             objective_loss_function = objective_loss_function,
             scores_train = [('trn pixelAcc', pixel_accuracy)],
             y_tensor_type = T.ltensor3,
-            eval_size=self.eval_size,
             **kwargs
         )
         # print "\n\n---------------------------\nCompiling regr network...\n---------------------------"

@@ -361,7 +361,6 @@ class greedyNet(object):
             - copy folders/logs in main model (and delete previous versions)
             - update all paths of subNets
         '''
-        import mod_nolearn.utils as utils
         self.preLoad = preLoad
         for net_name in preLoad:
             load = preLoad[net_name]
