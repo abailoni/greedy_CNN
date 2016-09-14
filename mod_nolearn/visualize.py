@@ -8,7 +8,7 @@ import json
 
 from lasagne.layers import get_all_param_values
 
-
+from nolearn.lasagne import NeuralNet
 
 
 def plot_images(images, figsize=(6, 6)):
@@ -56,6 +56,27 @@ def plot_GrTruth(images, figsize=(6, 6)):
     cbar_ax = figs.add_axes([0.85, 0.15, 0.05, 0.7])
     figs.colorbar(s, cax=cbar_ax)
     return plt
+
+
+def plot_predict_proba(net, X, y, pdf_name, mistakes_plot=False, images_plot=False, prediction_plot=False):
+    '''
+    Don't put the extension in the pdf_name...
+    '''
+    predict_proba = net.predict_proba(X)
+    fig = plot_GrTruth(predict_proba[:,1,:,:])
+    fig.savefig(pdf_name+'_predProb.pdf')
+    fig = plot_GrTruth(y)
+    fig.savefig(pdf_name+'_GrTr.pdf')
+    if mistakes_plot:
+        fig = plot_GrTruth(np.abs(predict_proba[:,1,:,:]-y))
+        fig.savefig(pdf_name+'_mistakes.pdf')
+    if images_plot:
+        fig = plot_images(X)
+        fig.savefig(pdf_name+'_inputImages.pdf')
+    if prediction_plot:
+        predict = predict_proba.argmax(axis=1)
+        fig = plot_GrTruth(predict)
+        fig.savefig(pdf_name+'_pred.pdf')
 
 
 
@@ -216,10 +237,10 @@ def get_tuning_models(folder, exclude=None, order_col=4):
     if exclude:
         all_data = all_data[:-exclude]
     model_IDs = all_data[:,0]
-    ordered_model_paths = [info_files[0]['path_out']+'model_%d' %model_ID for model_ID in model_IDs]
+    ordered_model_paths = [info_files[0]['path_out']+'model_%d/' %model_ID for model_ID in model_IDs]
     return [ordered_model_paths, model_IDs]
 
-def plot_stuff(quantities, inputs, callable, labels=None, callable_args=None, **kwargs):
+def plot_stuff(quantities, inputs, callable, labels=None, callable_args={}, **kwargs):
     from matplotlib.pyplot import cm
 
 
@@ -243,7 +264,7 @@ def plot_stuff(quantities, inputs, callable, labels=None, callable_args=None, **
     if labels is None:
         labels = ['']*N
     colors = cm.rainbow(np.linspace(0,1,N))
-    lineStyles = ['-', '-.', '--']*10
+    lineStyles = ['-.', '-', '--']*10
 
     plot_kwargs = {}
     plot_kwargs['lineStyles'] = []
@@ -282,8 +303,8 @@ def scatter_plot(folder, tun_ID=None, quantity=None, exclude=None):
     info_files = []
     data = []
     if tun_ID:
-        data.append(np.loadtxt(folder+'/log-%d.txt' %tun_ID))
-        with open(folder+'/info-tuning_%d.txt' %tun_ID) as info_file:
+        data.append(np.loadtxt(folder+'log-%d.txt' %tun_ID))
+        with open(folder+'info-tuning_%d.txt' %tun_ID) as info_file:
             info_files.append(json.load(info_file))
     else:
         # IMPLEMENT REGEX!
