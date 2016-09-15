@@ -17,24 +17,6 @@ from greedy_convnet import BatchIterator_Greedy
 
 
 class greedyLayer(object):
-    '''
-    TO BE COMPLETELY UPDATED
-
-    This class contains the network that put together the LogRegr networks computed in the boosting procedure.
-
-    Inputs and options:
-        - instance of class Boost_LogRegr (mandatory): the first trained node. Many parameters of Net2 are inherited by this network
-        - batch_size (100)
-        - batchShuffle (True)
-        - filter_size (7): the dimension of the filter of the second convolutional level
-        - num_nodes (5): number of nodes trained in a boosting matter
-        - usual NeuralNet parameters (update, learning_rate...)
-
-    Names of the layers:
-        - conv1
-        - mask
-        - conv2
-    '''
     def __init__(self,previous_layers,input_filters,**kwargs):
         info = deepcopy(kwargs)
         # -----------------
@@ -57,7 +39,6 @@ class greedyLayer(object):
         # -------------------------------------
         # Specific parameters:
         # -------------------------------------
-        # self.weights_HeGainin = kwargs.pop('weights_HeGain', 1.)
         kwargs.setdefault('name', 'convSoftmax')
         self.num_nodes = kwargs.pop('num_nodes', 5)
         self.batch_size = kwargs.pop('batch_size', 100)
@@ -144,15 +125,12 @@ class greedyLayer(object):
         self.net.layers_['conv1'].params[self.net.layers_['conv1'].W].remove('regularizable')
         self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('regularizable')
 
-        # print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
+        # Compiling Network ---------------------------
         # tick = time.time()
         self.net.initialize()
         # tock = time.time()
         # print "Done! (%f sec.)\n\n\n" %(tock-tick)
 
-
-        # # Insert the weights of the first network:
-        # self.insert_weights(regrNode1)
 
         # -------------------------------------
         # SAVE INFO NET:
@@ -182,14 +160,6 @@ class greedyLayer(object):
          - W2: (num_classes, num_classes*num_filters1*num_nodes, filter_length2)
          - b2: (num_classes,)
         '''
-        # # Only the first time:
-        # # if not hasattr(self, 'active_nodes'):
-        # if self.active_nodes==0:
-        #     self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('trainable')
-        #     self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].b].remove('trainable')
-        #     self.net._initialized = False
-        #     self.net.initialize()
-
         # ------------------
         # Update mask:
         # ------------------
@@ -225,76 +195,6 @@ class greedyLayer(object):
         newNode_W2, newNode_b2 = glorot.sample(newNode_W2.shape), constant.sample(newNode_b2.shape)
         layers.set_all_param_values(self.net.layers_['conv2_newNode'], [newNode_W1, newNode_b1, newNode_W2, newNode_b2])
 
-    # def deactivate_nodes(self):
-    #     # --------------------
-    #     # Set layer conv2 not-trainable:
-    #     # --------------------
-    #     params = self.net.layers_['conv2'].params
-    #     W, b = self.net.layers_['conv2'].W, self.net.layers_['conv2'].b
-    #     if 'trainable' in params[W]:
-    #         params[W].remove('trainable')
-    #     if 'trainable' in params[b]:
-    #         params[b].remove('trainable')
-    #     self.net._initialized = False
-    #     self.net.initialize()
-
-    # def activate_nodes(self):
-    #     '''
-    #     Makes the active weights of the main part of the net (conv2 layer) trainable. Then recompile the net.
-    #     '''
-    #     # Set layer conv2 trainable:
-    #     self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].add('trainable')
-    #     self.net.layers_['conv2'].params[self.net.layers_['conv2'].b].add('trainable')
-    #     self.net._initialized = False
-    #     self.net.initialize()
-
-    # def deactivate_nodes_BOOST(self):
-    #     # --------------------
-    #     # Set layer conv2 and conv2-new as not-trainable. Boosting constant is trainable
-    #     # --------------------
-    #     params = self.net.layers_['conv2'].params
-    #     W, b = self.net.layers_['conv2'].W, self.net.layers_['conv2'].b
-    #     if 'trainable' in params[W]:
-    #         params[W].remove('trainable')
-    #     if 'trainable' in params[b]:
-    #         params[b].remove('trainable')
-
-    #     params = self.net.layers_['conv2_newNode'].params
-    #     W, b = self.net.layers_['conv2_newNode'].W, self.net.layers_['conv2_newNode'].b
-    #     if 'trainable' in params[W]:
-    #         params[W].remove('trainable')
-    #     if 'trainable' in params[b]:
-    #         params[b].remove('trainable')
-
-    #     params = self.net.layers_['boosting_merge'].params
-    #     boosting_constant = self.net.layers_['boosting_merge'].boosting_constant
-    #     params[boosting_constant].add('trainable')
-    #     boosting_constant.set_value(np.ones(1,dtype=np.float32))
-
-
-    #     self.net._initialized = False
-    #     self.net.initialize()
-
-    # def activate_nodes_BOOST(self):
-    #     '''
-    #     Makes the active weights of the main part of the net (conv2 layer) trainable. Then recompile the net.
-    #     Furthermore the boosting constant is set as "Not trainable"
-    #     '''
-    #     # Set layer conv2 trainable:
-    #     self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].add('trainable')
-    #     self.net.layers_['conv2'].params[self.net.layers_['conv2'].b].add('trainable')
-
-    #     # Set layer conv2_newNode trainable:
-    #     self.net.layers_['conv2_newNode'].params[self.net.layers_['conv2_newNode'].W].add('trainable')
-    #     self.net.layers_['conv2_newNode'].params[self.net.layers_['conv2_newNode'].b].add('trainable')
-
-    #     # Set boostingConstant not trainable:
-    #     self.net.layers_['boosting_merge'].params[self.net.layers_['boosting_merge'].boosting_constant].add('trainable')
-    #     self.net.layers_['boosting_merge'].boosting_constant.set_value(np.ones(1,dtype=np.float32))
-
-
-    #     self.net._initialized = False
-    #     self.net.initialize()
 
 
 class MaskLayer(layers.Layer):

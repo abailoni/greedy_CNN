@@ -72,7 +72,7 @@ def plot_predict_proba(net, X, y, pdf_name, mistakes_plot=False, images_plot=Fal
         fig.savefig(pdf_name+'_mistakes.pdf')
     if images_plot:
         fig = plot_images(X)
-        fig.savefig(pdf_name+'_inputImages.pdf')
+        fig.savefig(pdf_name+'_zImages.pdf')
     if prediction_plot:
         predict = predict_proba.argmax(axis=1)
         fig = plot_GrTruth(predict)

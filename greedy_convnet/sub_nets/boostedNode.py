@@ -12,48 +12,14 @@ from mod_nolearn.segm import segmNeuralNet
 from greedy_convnet import BatchIterator_Greedy
 
 
-DEFAULT_imgShape = (1024,768)
+# DEFAULT_imgShape = (1024,768)
 
-# class UpScaleLayer(layers.Layer):
-#     '''
-#     --------------------------
-#     Subclass of lasagne.layers.Layer:
-#     --------------------------
-
-#     Upscale (if necessary) the output of the logistic regression to match the
-#     dimensions of the initial image.
-
-#     The algorithm used is bilinear interpolation.
-#     The layer is not Trainable at this stage.
-
-#     UNCOMPLETE: for the moment is an identity layer.
-#
-#     WRONG IMPLEMENTATION init(). Check MaskLayer...
-#     '''
-#     def __init__(self, *args, **kwargs):
-#         self.imgShape = kwargs.pop('imgShape', DEFAULT_imgShape)
-#         super(UpScaleLayer, self).__init__(*args, **kwargs)
-
-#     def get_output_for(self, input, **kwargs):
-#         # Use scipy.ndimage.zoom(data, (1, 2, 2)) and select bilinear
-#         return input
-#         # return input.sum(axis=-1)
-
-#     def get_output_shape_for(self, input_shape):
-#         return input_shape
-#         # Always original dim. of image...
-#         # return input_shape[:-1]
 
 
 class BatchIterator_boostRegr(BatchIterator_Greedy):
     '''
-    It modifies the inputs using the processInput() class.
-    Optionally it modifies the targets to fit the residuals (boosting).
-
-    Inputs:
-      - processInput (None): to apply DCT or previous fixed layers. Example of input: processInput(DCT_size=4)
-      - best_classifier (None): to fit the residuals
-      - other usual options: batch_size, shuffle
+    Given a batch of images and the targets, it updates the boosting weights given
+    by the residuals of the previous classifier.
     '''
     def __init__(self, best_classifier, objective_boost_loss, *args, **kwargs):
         self.best_classifier = best_classifier
@@ -62,18 +28,14 @@ class BatchIterator_boostRegr(BatchIterator_Greedy):
 
     def transform(self, Xb, yb):
         if yb is not None:
-            # if Xb.ndim!=yb.ndim:
-            #     raise ValueError('The targets are not in the right shape. \nIn order to implement a boosting classification, the fit function as targets y should get a matrix with ints [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class labels.')
 
-            # Fit on residuals:
             if self.best_classifier:
+                # Updates boosting weights:
                 pred_proba = self.best_classifier.predict_proba(Xb) #[N,C,x,y]
                 C = pred_proba.shape[1]
                 pred_proba = pred_proba.transpose((0,2,3,1)).reshape((-1,C)).astype(np.float32)
                 yb_vect = yb.reshape((-1,))
                 prob_residuals = 1. - pred_proba[np.arange(yb_vect.shape[0]),yb_vect]
-                # if self.objective_boost_loss.shape!=prob_residuals.shape:
-                #     prob_residuals = np.pad(prob_residuals, ((0,self.objective_boost_loss.shape[0]-prob_residuals.shape[0])), mode='constant')
                 self.objective_boost_loss.update_boosting_weights(prob_residuals)
             else:
                 shape = self.objective_boost_loss.shape
@@ -85,6 +47,9 @@ from theano.tensor.nnet import categorical_crossentropy
 import theano
 
 class categorical_crossentropy_segm_boost(object):
+    '''
+    Modified categorical_crossentropy loss for the boosting weights.
+    '''
     def __init__(self, out_shape):
         self.shape = out_shape[0]*out_shape[1]*out_shape[2]
         self.boosting_weights = theano.shared(np.ones((self.shape,),dtype=np.float32))
@@ -116,50 +81,20 @@ class categorical_crossentropy_segm_boost(object):
 
 
 class boostedNode(object):
-    '''
-    TO BE COMPLETELY UPDATED
-        - logs_path
-
-
-    Options and inputs:
-        - processInput (Required): istance of the class greedy_utils.processInput.
-        - filter_size (7): requires an odd size to keep the same output dimension
-        - best_classifier (None): best previous classifier
-        - batch_size (100)
-        - batchShuffle (True)
-        - eval_size (0.1): decide the cross-validation proportion. Do not use the option "train_split" of NeuralNet!
-        - xy_input (None, None): use only for better optimization. But then use the cloning process at your own risk.
-        - all additional parameters of NeuralNet.
-          (e.g. update=adam, max_epochs, update_learning_rate, etc..)
-
-    Deprecated:
-        - [num_classes now fixed to 2, that means one filter...]
-        - imgShape (1024,768): used for the final residuals
-        - channels_image (3): channels of the original image
-
-    IMPORTANT REMARK: (valid only for Classification, not LogRegres...)
-    in order to implement a boosting classification, the fit function as targets y should get a matrix with floats [0, 0, ..., 1, ..., 0, 0] instead of just an array of integers with the class numbers.
-
-    To be fixed:
-        - a change in the batch_size should update the batchIterator
-        - add a method to update the input-processor
-        - channels_input with previous fixed layers
-        - check if shuffling in the batch is done in a decent way
-    '''
-    def __init__(self,convSoftmaxNet,**kwargs):
+    def __init__(self,greedyLayer,**kwargs):
         info = deepcopy(kwargs)
         # --------------------------
-        # Inherited by convSoftmax:
+        # Inherited by greedyLayer:
         # --------------------------
-        self.xy_input = convSoftmaxNet.xy_input
-        self.filter_size1 = convSoftmaxNet.filter_size1
-        self.filter_size2 = convSoftmaxNet.filter_size2
-        self.input_filters = convSoftmaxNet.input_filters
-        self.num_filters1 = convSoftmaxNet.num_filters1
-        self.num_classes = convSoftmaxNet.num_classes
-        self.previous_layers = convSoftmaxNet.previous_layers
-        self.eval_size = convSoftmaxNet.eval_size
-        self.best_classifier = convSoftmaxNet.net if not convSoftmaxNet.net.layers_['mask'].first_iteration else None
+        self.xy_input = greedyLayer.xy_input
+        self.filter_size1 = greedyLayer.filter_size1
+        self.filter_size2 = greedyLayer.filter_size2
+        self.input_filters = greedyLayer.input_filters
+        self.num_filters1 = greedyLayer.num_filters1
+        self.num_classes = greedyLayer.num_classes
+        self.previous_layers = greedyLayer.previous_layers
+        self.eval_size = greedyLayer.eval_size
+        self.best_classifier = greedyLayer.net if not greedyLayer.net.layers_['mask'].first_iteration else None
 
         if 'eval_size' in kwargs:
             if kwargs['eval_size']!=self.eval_size:
@@ -168,7 +103,7 @@ class boostedNode(object):
         # -----------------
         # Own attributes:
         # -----------------
-        kwargs.setdefault('name', 'boostRegr')
+        kwargs.setdefault('name', 'boostedNode')
         self.init_weight = kwargs.pop('init_weight', 1e-3)
         self.batch_size = kwargs.pop('batch_size', 100)
         self.batchShuffle = kwargs.pop('batchShuffle', True)
@@ -239,52 +174,3 @@ class boostedNode(object):
         json.dump(info, file(info['logs_path']+'/info-net.txt', 'w'))
 
 
-    # def set_bestClassifier(self, best_classifier):
-    #     '''
-    #     CHECK...
-    #     It updates the best_classifier. The network will then fit the
-    #     residuals wrt this classifier from now on
-    #     '''
-    #     self.best_classifier = best_classifier
-    #     customBatchIterator = BatchIterator_boostRegr(
-    #         batch_size=self.batch_size,
-    #         shuffle=self.batchShuffle,
-    #         best_classifier=self.best_classifier,
-    #         previous_layers=self.previous_layers
-    #     )
-    #     self.net.batch_iterator_train = customBatchIterator
-    #     self.net.batch_iterator_test = customBatchIterator
-
-    # def _reset_weights(self):
-    #     '''
-    #     CHECK...
-    #     '''
-    #     W, b = get_all_param_values(self.net.layers_['convLayer'])
-    #     glorot, constant = lasagne.init.GlorotNormal(), lasagne.init.Constant()
-    #     set_all_param_values(self.net.layers_['convLayer'], [glorot.sample(W.shape), constant.sample(b.shape)])
-
-    # def clone(self,**kwargs):
-    #     '''
-    #     Options:
-    #         - reset (False): for resetting the weights of the new Net
-    #         - setClassifier (False): if set to True, the new Net will have as best_previous_classifier the previous Net
-
-    #     IT DOESN'T HAVE ANY SENSE... CHANGE TO JUST DELETE THE WEIGHTS...
-
-    #     Return the cloned object.
-    #     '''
-    #     # if self.xy_input is not (None, None):
-    #     #     raise Warning("Cloning with xy-image-inputs already set...")
-    #     kwargs.setdefault('reset', False)
-    #     kwargs.setdefault('setClassifier', False)
-    #     newObj = copy(self)
-    #     if kwargs['reset']:
-    #         # Reset some stuff:
-    #         if newObj.net.verbose:
-    #             # newObj.net.on_epoch_finished.append(PrintLog())
-    #             pass
-    #         newObj.net.train_history_[:] = []
-    #         newObj._reset_weights()
-    #     if kwargs['setClassifier']:
-    #         newObj.set_bestClassifier(self.net)
-    #     return newObj

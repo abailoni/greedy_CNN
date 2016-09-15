@@ -10,24 +10,19 @@ import various.utils as utils
 class tuneHyperParams(object):
     def __init__(self, hyperparameters, outputs, **kwargs):
         '''
-        FOR THE MOMENT IT MAKES SENSE WITH TWO hyperparameters at time.
-
         Inputs:
-          - hyperparameters: a tuple of lists in this form
+          - hyperparameters: a tuple of lists in the form
                 (
                     ['par_name', start, stop, 'linear', np.int8],
                     ['par2_name', ...]
                 )
-          - outputs: keys-name for outputs
+          - outputs: key-names for outputs
 
         Options:
           - name
           - num_iterations
           - path_outputs
           - log_filename
-
-        Further possible additions:
-          - cancel training of some specific parameters
         '''
         self.hyperparams = hyperparameters
         self.outputs = outputs
@@ -154,10 +149,6 @@ class tuneHyperParams(object):
 
         min_x, max_x = self.hyperparams[0][1:3]
         min_y, max_y = self.hyperparams[1][1:3]
-        # range_x = max_x-min_x
-        # range_y = max_y-min_y
-        # ax.set_xlim([min_x-range_x*0.1,max_x+range_x*0.1])
-        # ax.set_ylim([min_y-range_y*0.1,max_y+range_y*0.1])
         ax.set_xlim([min_x,max_x])
         ax.set_ylim([min_y,max_y])
         ax.grid(True)

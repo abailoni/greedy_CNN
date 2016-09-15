@@ -18,7 +18,7 @@ import various.utils as utils
 
 
 def restore_greedyModel(model_name, path_logs='./logs/'):
-    # After this, if you rename the model, you should call the method update_all_paths.
+    # After this, if the model is renamed, you should call the method update_all_paths
     return utils.restore_model(path_logs+model_name+'/model.pickle')
 
 class greedyNet(object):
@@ -27,12 +27,18 @@ class greedyNet(object):
         Initialize a network that uses just the first layers of VGG16.
 
         Inputs:
-         - How many layers to keep of VGG16 (int).
-         - eval_size (0.1)
+         - how many layers to keep of VGG16 (temporary max=2 due to MaxPooling layers)
 
-        Be careful with Pooling.
 
-        All the arguments are the usual for nolearn NeuralNet (segmNet)
+        Options and parameters:
+
+         - mod: the accepted options are 'basic' or 'ReLU'. With 'basic', the greedy network uses a softmax nonlinearity that is later transformed in a ReLU nonlinearity. With 'ReLU', the rectify linearity is used from the beginning (check boostedNode_ReLU)
+         - eval_size: percentage between training and validation data for nolearn NeuralNet class
+         - BASE_PATH_LOG
+         - model_name
+         - further modNeuralNet parameters
+
+
         '''
         # ------------------------------------
         # Compile network with vgg16 layers:
@@ -51,6 +57,8 @@ class greedyNet(object):
         self.eval_size =  kwargs.pop('eval_size',0.)
         self.model_name = kwargs.pop('model_name', 'greedyNET')
         self.BASE_PATH_LOG = kwargs.pop('BASE_PATH_LOG', "./logs/")
+
+
         self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
         self.layers = vgg16.nolearn_vgg16_layers()[:self.num_VGG16_layers+1]
         fixed_kwargs = {
@@ -62,7 +70,6 @@ class greedyNet(object):
         }
         self.net_kwargs = kwargs.copy()
         self.net_kwargs.update(fixed_kwargs)
-
         self.net = segmNeuralNet(
             layers=self.layers,
             scores_train=[('trn pixelAcc', segm_utils.pixel_accuracy)],
@@ -70,7 +77,10 @@ class greedyNet(object):
             **self.net_kwargs
         )
 
-        # print "Compiling inputProcess..."
+        # ---------------------
+        # Initialize net:
+        # ---------------------
+        # print "Compiling greedy network..."
         # tick = time.time()
         self.net.initialize()
         # tock = time.time()
@@ -82,80 +92,93 @@ class greedyNet(object):
         # --------------------
         self.net = vgg16.nolearn_insert_weights_vgg16(self.net,self.num_VGG16_layers)
 
+
         self.output_channels = self.net.layers[-1][1]['num_filters']
         self.last_layer_name = self.net.layers[-1][1]['name']
-
         self.regr, self.convSoftmax = {}, {}
         self.preLoad = {}
 
 
-    def train_new_layer(self, (fit_routine_regr, num_regr, kwargs_regr) , (fit_routine_net2, num_net2, kwargs_convSoftmax), finetune_routine_net2, adjust_convSoftmax=None):
+    def train_new_layer(self,
+            (fit_boosted_nodes, num_nodes, kwargs_boosted_nodes),
+            (finetune_nodes, kwargs_finetune_nodes),
+            adjust_convSoftmax=None):
+        '''
+        It trains a new layer of the greedy network.
+
+        Inputs:
+
+            - tuple (fit_boosted_nodes, num_nodes, kwargs_boosted_nodes)
+            where fit_boosted_nodes is a callable function of type fun(net) that trains one node and return the net (where net is an instance of nolearn NeuralNet)
+
+            - tuple (finetune_nodes, kwargs_finetune_nodes)
+            where finetune_nodes is a callable training and finetuning the computed nodes
+
+            - adjust_convSoftmax is an optional callable that adjusts the parameters of the greedyLayer after the training of each boosted node (e.g. learning rate, etc...)
+        '''
+
 
         # ------------------------------------------------
-        # Parallelized loop: (serialized for the moment)
+        # Loop for more subsets of nodes: (fixed to one for now)
+        #
+        # (to be improved with parallelization)
         # ------------------------------------------------
-        Nets2 = []
-        for idx_net2 in range(num_net2):
+        num_subsets = 1
+        nodes_subsets = []
+        for indx_subset in range(num_subsets):
             # -------------------------------------------
-            # Fit first node and initialize convSoftmax:
+            # Fit first node and initialize greedyLayer:
             # -------------------------------------------
-            convSoftmax_name = "cnv_L%d_G%d"%(self.num_layers,idx_net2)
-            self.init_convSoftmax(convSoftmax_name, kwargs_convSoftmax, num_regr)
+            greedyLayer_name = "cnv_L%d_G%d"%(self.num_layers,indx_subset)
+            self.init_greedyLayer(greedyLayer_name, kwargs_finetune_nodes, num_nodes)
 
-            regr_name = "regr_L%dG%dN%d" %(self.num_layers,idx_net2,0)
-            self.init_regr(regr_name, kwargs_regr, convSoftmax_name)
-            train_flag = self.train_regr(regr_name,  fit_routine_regr, idx_net2, 0)
-            # train_flag = True
-
+            boostedNode_name = "regr_L%dG%dN%d" %(self.num_layers,indx_subset,0)
+            self.init_boostedNode(boostedNode_name, kwargs_boosted_nodes, greedyLayer_name)
+            train_flag = self.train_boostedNode(boostedNode_name,  fit_boosted_nodes, indx_subset, 0)
 
             # Check if first node was trained or it was loaded
-            # but not inserted in the main net:
-            if train_flag or self.convSoftmax[convSoftmax_name].net.layers_['mask'].first_iteration:
-                self.convSoftmax[convSoftmax_name].insert_weights(self.regr[regr_name])
-            # self.train_convSoftmax(convSoftmax_name, idx_net2, fit_routine_net2, finetune_routine_net2,  0)
+            # but not inserted in the main greedyLayer:
+            if train_flag or self.convSoftmax[greedyLayer_name].net.layers_['mask'].first_iteration:
+                self.convSoftmax[greedyLayer_name].insert_weights(self.regr[boostedNode_name])
 
             # -----------------------------------------
             # Boosting loop:
             # -----------------------------------------
-            for num_node in range(1,num_regr):
-                # Fit new regression to residuals:
-                regr_name = "regr_L%dG%dN%d" %(self.num_layers,idx_net2,num_node)
-                self.init_regr(regr_name, kwargs_regr, convSoftmax_name)
+            for num_node in range(1,num_nodes):
 
-                train_flag = self.train_regr(regr_name,  fit_routine_regr, idx_net2, num_node)
-                # train_flag=True
+                # Fit new boostedNode:
+                boostedNode_name = "regr_L%dG%dN%d" %(self.num_layers,indx_subset,num_node)
+                self.init_boostedNode(boostedNode_name, kwargs_boosted_nodes, greedyLayer_name)
+                train_flag = self.train_boostedNode(boostedNode_name,  fit_boosted_nodes, indx_subset, num_node)
 
-                # Insert in convSoftmax:
-                if train_flag or self.check_insert_weights(convSoftmax_name, num_node):
-                    self.convSoftmax[convSoftmax_name].insert_weights(self.regr[regr_name])
+                # Insert in greedyLayer:
+                if train_flag or self.check_insert_weights(greedyLayer_name, num_node):
+                    self.convSoftmax[greedyLayer_name].insert_weights(self.regr[boostedNode_name])
 
-                # # Call external function to adjust parameters:
-                # if adjust_convSoftmax:
-                #     self.convSoftmax[convSoftmax_name] = adjust_convSoftmax(self.convSoftmax[convSoftmax_name])
+                # Finetune active nodes in greedyLayer:
+                self.finetune_greedyLayer(greedyLayer_name, indx_subset, finetune_nodes, num_node)
 
-                # Retrain:
-                self.train_convSoftmax(convSoftmax_name, idx_net2, fit_routine_net2, finetune_routine_net2, num_node)
+            nodes_subsets.append(self.convSoftmax[greedyLayer_name])
 
-            Nets2.append(self.convSoftmax[convSoftmax_name]) ## This should be ok
-
-        # Add new layer:
-        self._insert_new_layer(Nets2[0])
+        # Add new greedy layer:
+        self._insert_new_layer(nodes_subsets[0])
         self.pickle_greedyNET()
 
 
-    def check_insert_weights(self, net_name, active_nodes):
-        # Really bad repetition of code... BUT THERE IS MOD IN SIGN!
+    def check_insert_weights(self, greedyLayer_name, active_nodes):
+        '''
+        It checks if to insert the weights of a boosted node into the greedyLayer.
+        '''
         insert_weights = True
-        if net_name in self.preLoad:
-            load = self.preLoad[net_name]
+        if greedyLayer_name in self.preLoad:
+            load = self.preLoad[greedyLayer_name]
             insert_weights = load[1]
             if len(load)==3:
-                print active_nodes, load[2]
                 insert_weights = True if active_nodes>=load[2] else False #MOD
         return insert_weights
 
-    def init_regr(self, net_name, kwargs, convSoftmax_name):
-        # If not pretrained, initialize new network:
+    def init_boostedNode(self, net_name, kwargs, convSoftmax_name):
+        # If not preLoaded, initialize new node:
         if net_name not in self.regr:
             params = deepcopy(kwargs)
             logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
@@ -173,8 +196,8 @@ class greedyNet(object):
                 **params
             )
 
-    def init_convSoftmax(self, net_name, kwargs, num_nodes):
-        # If not pretrained, initialize new network:
+    def init_greedyLayer(self, net_name, kwargs, num_nodes):
+        # If not preLoaded, initialize new network:
         if net_name not in self.convSoftmax:
             logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
             utils.create_dir(logs_path)
@@ -193,13 +216,13 @@ class greedyNet(object):
                 **params
             )
 
-    def train_regr(self, net_name, fit_routine, idx_net2, num_node):
+    def train_boostedNode(self, net_name, fit_routine, idx_net2, num_node):
         train = True
         # Check if to train:
         if net_name in self.preLoad:
             train = self.preLoad[net_name][1]
 
-        # Train subNet:
+        # Train node:
         if train:
             print "\n\n----------------------------------------------------"
             print "TRAINING Boosted Softmax - Layer %d, group %d, node %d" %(self.num_layers,idx_net2,num_node)
@@ -211,8 +234,8 @@ class greedyNet(object):
         return train
 
 
-    def train_convSoftmax(self, net_name, idx_net2, fit_routine=None, finetune_routine=None,  active_nodes=0):
-        # Check if to train:
+    def finetune_greedyLayer(self, net_name, idx_net2, fit_routine=None,active_nodes=0):
+        # Check if to finetune:
         train = True
         if net_name in self.preLoad:
             load = self.preLoad[net_name]
@@ -220,21 +243,13 @@ class greedyNet(object):
             if len(load)==3:
                 train = True if active_nodes>load[2] else False
 
-        # Train subNet:
+        # Finetune:
         if train:
             print "\n\n--------------------------------------------------------"
             print "FINE-TUNING Softmax - Layer %d, group %d, active nodes %d " %(self.num_layers,idx_net2,active_nodes)
             print "--------------------------------------------------------\n\n"
-            # if active_nodes!=0:
-            #     self.convSoftmax[net_name].deactivate_nodes()
             if fit_routine:
-                # print "Tuning new node:"
                 self.convSoftmax[net_name].net = fit_routine(self.convSoftmax[net_name].net)
-            # if active_nodes!=0:
-            #     self.convSoftmax[net_name].activate_nodes()
-            # if finetune_routine:
-            #     print "\nFinetuning all second layer until last node:"
-            #     self.convSoftmax[net_name].net = finetune_routine(self.convSoftmax[net_name].net)
             self.post_Training(net_name)
 
 
@@ -248,13 +263,14 @@ class greedyNet(object):
             utils.pickle_model(self.regr[net_name],self.BASE_PATH_LOG_MODEL+net_name+'/routine.pickle')
         self.pickle_greedyNET()
 
+
+
     def _insert_new_layer(self, net2):
         '''
-        Insert new computed layer, recompile and insert old weights.
+        Insert new computed layer, recompile main Greedy net and insert old weights.
 
         All parameters are trainable by default.
 
-        IT SHOULD BE UPDATED TAKING A LIST OF NET2 COMPUTED IN PARALLEL...
         '''
         # -----------------
         # Collect weights:
@@ -345,12 +361,13 @@ class greedyNet(object):
         '''
         Input:
             - preLoad: a dictionary such that:
-                - the keys are the names of the nodes (e.g. convL0G0)
+                - the keys are the names of the nodes (e.g. 'cnv_L0_G0')
                 - each element contains a tuple such that:
-                     (path_to_pretr_model, train_flag)
+                     (path_to_pretr_model, train_flag, nodes_trained)
                      ('logs/model_A/', True, nodes_trained)
 
-        The third options indicates the pretrained nodes of a convSoftmax subNet.
+        The third options indicates the pretrained nodes only in the case of a greedyLayer.
+
         In particular we have:
                 train = True if active_nodes>load[2] else False
         where the active_nodes are the one in the MAIN part of the net, w/o considering the new node.

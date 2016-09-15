@@ -31,6 +31,8 @@ def categorical_crossentropy_segm(prediction_proba, targets):
     results = T.reshape(results, (shape[0],shape[2],shape[3]))
 
 
+
+    # QUICK IMPLEMENTATION FOR TWO SPECIFIC CLASSES. NEEDS GENERALIZATION
     # Weights depending on class occurency:
     weights = (1.02275, 44.9647)
     cars_indx, not_cars_indx = T.nonzero(targets), T.nonzero(T.eq(targets,0))

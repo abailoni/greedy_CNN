@@ -27,6 +27,9 @@ class modBatchIterator(BatchIterator):
 
 
 class modObjective(object):
+    '''
+    It gives a nicer implementation of L2 regularization.
+    '''
     def __init__(self,l2=0):
         self.l2 = l2
 
@@ -72,7 +75,7 @@ class modTrainSplit(object):
     '''
     Accepted modes:
         'standard': the sklearn cross-validation tool is used
-        'proportion': the vectors are divided depending on the proportion eval_size
+        'proportion': the arrays are divided depending on the proportion eval_size
     '''
     def __init__(self, eval_size, stratify=True, mode='proportion'):
         self.mode = mode
@@ -128,16 +131,12 @@ class modNeuralNet(NeuralNet):
     '''
     Modified version of NeuralNet (nolearn).
 
-    ## FURTHER IDEAS ##
-
-    - Accept separate training_data and test_data instead of dividing one array.
-
     -------------------------
     THINGS IMPLEMENTED
     -------------------------
     The function accepted as input on_batch_finished are of the kind:
         func(net, train_history_, train_outputs)
-    and actually they are executed with a frequency 'numIter_subLog'.
+    and they are executed with a frequency 'numIter_subLog'.
 
     LOGS:
      - log_filename: the data in train_history are saved in a file (after each epoch)
@@ -158,15 +157,6 @@ class modNeuralNet(NeuralNet):
      - numIter_subLog (None)
      - subLog_filename (None): if None the results are printed on screen. The file is updated only at the end of the epoch.
      - livePlot (False): live plot of the loss
-
-
-
-
-
-        # THIS SHOULD BE ALL UPDATED WITH NICE UPDATE METHODS...
-        # E.g.: update pickleModel_mode, then set again content of 'on_something_end'
-
-        Put attributes as proprieties...
 
     '''
 
