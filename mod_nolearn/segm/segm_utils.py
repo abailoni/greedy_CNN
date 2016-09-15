@@ -5,7 +5,7 @@ from sklearn.metrics import confusion_matrix
 
 from theano.tensor.nnet import categorical_crossentropy
 from theano.tensor.nnet import softmax
-
+from various.utils import float32
 
 # ------------------------------------------------
 # Adapted non-linearities and objective-losses:
@@ -25,9 +25,22 @@ def categorical_crossentropy_segm(prediction_proba, targets):
         targ_mod = T.reshape(targ_mod1,(-1,shape[1]))
     else:
         targ_mod = T.reshape(targets, (-1,))
-    results = 1. * categorical_crossentropy(pred_mod, targ_mod)
+    results = categorical_crossentropy(pred_mod, targ_mod)
+
+
     results = T.reshape(results, (shape[0],shape[2],shape[3]))
+
+
+    # Weights depending on class occurency:
+    weights = (1.02275, 44.9647)
+    cars_indx, not_cars_indx = T.nonzero(targets), T.nonzero(T.eq(targets,0))
+    T.set_subtensor(results[cars_indx], results[cars_indx]*float32(weights[1]) )
+    T.set_subtensor(results[not_cars_indx], results[not_cars_indx]*float32(weights[0]) )
+
+
     return T.sum(results, axis=(1,2))
+
+
 
 # This is the non-linearity, giving the probabilities:
 def softmax_segm(x):
