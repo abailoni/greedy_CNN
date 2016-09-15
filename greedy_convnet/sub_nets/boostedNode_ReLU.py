@@ -113,7 +113,6 @@ class boostedNode_ReLU(object):
             objective_loss_function = objective_loss_function,
             scores_train = [('trn pixelAcc', pixel_accuracy)],
             y_tensor_type = T.ltensor3,
-            eval_size=self.eval_size,
             **kwargs
         )
         # print "\n\n---------------------------\nCompiling regr network...\n---------------------------"

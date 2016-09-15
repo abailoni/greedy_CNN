@@ -93,6 +93,8 @@ class modTrainSplit(object):
                 X_valid, y_valid = _sldict(X, valid_indices), y[valid_indices]
             elif self.mode=='proportion':
                 N = X.shape[0]
+                print N
+                print self.eval_size
                 train_slice = slice(round(N*(1-self.eval_size)))
                 valid_slice = slice(round(N*(1-self.eval_size)), None)
                 print train_slice, valid_slice

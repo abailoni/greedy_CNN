@@ -264,7 +264,7 @@ def plot_stuff(quantities, inputs, callable, labels=None, callable_args={}, **kw
     if labels is None:
         labels = ['']*N
     colors = cm.rainbow(np.linspace(0,1,N))
-    lineStyles = ['-.', '-', '--']*10
+    lineStyles = ['-', '--', '--']*10
 
     plot_kwargs = {}
     plot_kwargs['lineStyles'] = []
@@ -367,8 +367,10 @@ def scatter_plot(folder, tun_ID=None, quantity=None, exclude=None):
 
         fig.colorbar(s)
 
-        ax.set_xlim([x_min,x_max])
-        ax.set_ylim([y_min,y_max])
+        if x_max:
+            ax.set_xlim([x_min,x_max])
+        if y_max:
+            ax.set_ylim([y_min,y_max])
         ax.grid(True)
         ax.set_xlabel(x_info[0])
         ax.set_ylabel(y_info[0])

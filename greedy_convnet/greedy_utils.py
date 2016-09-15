@@ -1,5 +1,5 @@
 from mod_nolearn import BatchIterator
-import time
+# import time
 
 class BatchIterator_Greedy(BatchIterator):
     '''
@@ -16,9 +16,9 @@ class BatchIterator_Greedy(BatchIterator):
     def transform(self, Xb, yb):
         # Process inputs:
         if self.previous_layers:
-            tick = time.time()
+            # tick = time.time()
             Xb = self.previous_layers.predict_proba(Xb)
-            print "Tock: %g s" %(time.time()-tick)
+            # print "Tock: %g s" %(time.time()-tick)
 
         return Xb, yb
 

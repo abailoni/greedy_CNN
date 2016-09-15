@@ -141,7 +141,8 @@ class greedyLayer(object):
         self.net.layers_['conv1'].params[self.net.layers_['conv1'].b].remove('trainable')
         self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('trainable')
         self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].b].remove('trainable')
-
+        self.net.layers_['conv1'].params[self.net.layers_['conv1'].W].remove('regularizable')
+        self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('regularizable')
 
         # print "\n\n---------------------------\nCompiling Network 2...\n---------------------------"
         # tick = time.time()
