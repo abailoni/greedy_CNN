@@ -32,7 +32,19 @@ The packages contains the implementation of the greedy network, presenting the f
 
 The main class is located in file *greedy_net.py* and classes for the sub networks (boosted nodes and greedy layers) are located in folder ```greedy_convnet/sub_nets```.
 
-##### Example of usage
+### mod_nolearn
+
+The package is an extension of the library *nolearn*, featuring:
+
+- **collection of tools** used to perform useful actions at the end of batch iterations, epoch or training (see *nolearn_utils.py* for details)
+- **grid search of hyperparameters** (*needs better integration with already existing sklearn classes*) integrated with the log, pickle and plotting tools (located in *tune_hyperparams.py*)
+- specific **tools for segmentation** (located in folder ```mod_nolearn/segm/```)
+
+
+## Examples of usage
+Some working example scripts will be added soon.
+
+### greedy_convnet
 ```python
 # -------------------------------------
 # Import some images from dataset:
@@ -133,15 +145,8 @@ greedy_network.train_new_layer(
 pred = greedy_network.net.predict(X[0])
 ```
 
+
 ### mod_nolearn
-
-The package is an extension of the library *nolearn*, featuring:
-
-- **collection of tools** used to perform useful actions at the end of batch iterations, epoch or training (see *nolearn_utils.py* for details)
-- **grid search of hyperparameters** (*needs better integration with already existing sklearn classes*) integrated with the log, pickle and plotting tools (located in *tune_hyperparams.py*)
-- specific **tools for segmentation** (located in folder ```mod_nolearn/segm/```)
-
-##### Example of usage
 ```python
 # ------ # ------ # ------- # -------  #
 #        TUNE HYPERPARAMETERS:         #
