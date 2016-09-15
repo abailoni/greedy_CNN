@@ -1,40 +1,43 @@
+'''
 # -----------------------------------------
 # -----------------------------------------
 #
 # Collection of classes and functions used to perform useful actions
 # at the end of batch iterations, epoch or training.
 #
-#
-# In particular:
-#
-#  - AdjustVariable:
-#       update some parameter at the end of an epoch
-#       (e.g. the learning rate)
-#
-#  - pickle_model
-#       accept frequency and only_if_the_best options
-#
-#  - save_train_history:
-#       put train_history_ varaible in txt a file
-#
-#  - save_subEpoch_history:
-#       collect useful logs after each batch iterations. Given a certain
-#       frequency, it saves them in a file or updates a live-plot of the
-#       loss.
-#
-#  - check_badLoss:
-#       check possible infinite/NaN loss and send a StopIteration to the
-#       training process
-#
-#  - track_weights_distrib:
-#       needs some fixes...
-#
-#  - print_weight_distribution:
-#       ...?
-#
 # -----------------------------------------
 # -----------------------------------------
 
+Implemented:
+
+ - AdjustVariable:
+      update some parameter at the end of an epoch
+      (e.g. the learning rate)
+
+ - pickle_model
+      accept 'frequency' and 'only_if_best' options
+
+ - save_train_history:
+      put train_history_ varaible in txt a file
+
+ - save_subEpoch_history:
+      collect useful logs after each batch iterations. Given a certain
+      frequency, it saves them in a file and/or updates a live-plot of the
+      loss.
+
+ - check_badLoss:
+      check possible infinite/NaN loss and raise a StopIteration to the
+      training process
+
+ - track_weights_distrib:
+      needs some fixes...
+
+ - print_weight_distribution:
+      ...?
+
+# -----------------------------------------
+# -----------------------------------------
+'''
 
 import numpy as np
 from collections import OrderedDict

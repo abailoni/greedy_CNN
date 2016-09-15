@@ -1,6 +1,9 @@
-# ------------------------------
-# For the moment just a LogRegr
-# ------------------------------
+'''
+Modified version of greedyLayer.py using directly a ReLU non-linearity instead
+of going from sigmoid to ReLU
+'''
+
+
 import numpy as np
 from copy import deepcopy
 import json

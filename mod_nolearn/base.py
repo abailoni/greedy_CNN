@@ -91,13 +91,10 @@ class modTrainSplit(object):
                     kf = StratifiedKFold(y, round(1. / self.eval_size))
 
                 train_indices, valid_indices = next(iter(kf))
-                print train_indices, valid_indices
                 X_train, y_train = _sldict(X, train_indices), y[train_indices]
                 X_valid, y_valid = _sldict(X, valid_indices), y[valid_indices]
             elif self.mode=='proportion':
                 N = X.shape[0]
-                print N
-                print self.eval_size
                 train_slice = slice(round(N*(1-self.eval_size)))
                 valid_slice = slice(round(N*(1-self.eval_size)), None)
                 print train_slice, valid_slice
@@ -131,33 +128,12 @@ class modNeuralNet(NeuralNet):
     '''
     Modified version of NeuralNet (nolearn).
 
-    -------------------------
-    THINGS IMPLEMENTED
-    -------------------------
-    The function accepted as input on_batch_finished are of the kind:
-        func(net, train_history_, train_outputs)
-    and they are executed with a frequency 'numIter_subLog'.
+    For all the implemented options and tools check nolearn_utils.py
 
-    LOGS:
-     - log_filename: the data in train_history are saved in a file (after each epoch)
-
-
-    PICKLING THE MODEL:
-     - pickle_filename (None): it will be used as baseline
-     - pickleModel (None) accepts three options:
-            - onTrainingFinished
-            - atEpochFinished
-            - atSubEpoch (the model is pickled with a frequency decided by 'numIter_subLog')
-
-
-    SUB-EPOCHS LOGS:
-    The saved info are loss and train_scores. A function for the weight ditribution is easily implemented (see nolearn_utils.py)
-    For validation information use the pickled models.
-
-     - numIter_subLog (None)
-     - subLog_filename (None): if None the results are printed on screen. The file is updated only at the end of the epoch.
-     - livePlot (False): live plot of the loss
-
+    Some mods/additions:
+        - catch a StopIteration in case of infinite loss
+        - method returning loss
+        - ...
     '''
 
     def __init__(self, *args, **kwargs):
@@ -251,6 +227,10 @@ class modNeuralNet(NeuralNet):
         Modified version of the original one.
 
         The changes are highlighted in the comments.
+
+        Two mods:
+            - batch_outputs given to functions in on_batch_finished
+            - catch a StopIteration in case of infinite loss
         '''
         epochs = epochs or self.max_epochs
         X_train, X_valid, y_train, y_valid = self.train_split(X, y, self)

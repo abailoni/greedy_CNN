@@ -1,3 +1,11 @@
+'''
+Modified version of boostedNode.py using directly a ReLU non-linearity instead
+of going from sigmoid to ReLU
+'''
+
+
+
+
 from copy import deepcopy
 import json
 
@@ -12,6 +20,9 @@ from mod_nolearn.segm import segmNeuralNet
 
 
 from greedy_convnet.sub_nets.boostedNode import BatchIterator_boostRegr, categorical_crossentropy_segm_boost
+
+
+
 
 
 class boostedNode_ReLU(object):

@@ -18,7 +18,7 @@ import various.utils as utils
 
 
 def restore_greedyModel(model_name, path_logs='./logs/'):
-    # After this, if the model is renamed, you should call the method update_all_paths
+    # After this, if the model is renamed, the method update_all_paths should be called
     return utils.restore_model(path_logs+model_name+'/model.pickle')
 
 class greedyNet(object):
@@ -32,8 +32,12 @@ class greedyNet(object):
 
         Options and parameters:
 
-         - mod: the accepted options are 'basic' or 'ReLU'. With 'basic', the greedy network uses a softmax nonlinearity that is later transformed in a ReLU nonlinearity. With 'ReLU', the rectify linearity is used from the beginning (check boostedNode_ReLU)
-         - eval_size: percentage between training and validation data for nolearn NeuralNet class
+         - mod: the accepted options are 'basic' or 'ReLU'. With 'basic', the
+            greedy network uses a softmax nonlinearity that is later transformed
+            in a ReLU nonlinearity. With 'ReLU', the rectify linearity is used
+            from the beginning (check boostedNode_ReLU)
+         - eval_size: percentage between training and validation data for nolearn
+            NeuralNet class
          - BASE_PATH_LOG
          - model_name
          - further modNeuralNet parameters
@@ -109,12 +113,16 @@ class greedyNet(object):
         Inputs:
 
             - tuple (fit_boosted_nodes, num_nodes, kwargs_boosted_nodes)
-            where fit_boosted_nodes is a callable function of type fun(net) that trains one node and return the net (where net is an instance of nolearn NeuralNet)
+                where fit_boosted_nodes is a callable function of type fun(net)
+                that trains one node and return the net
+                (where net is an instance of nolearn NeuralNet)
 
             - tuple (finetune_nodes, kwargs_finetune_nodes)
             where finetune_nodes is a callable training and finetuning the computed nodes
 
-            - adjust_convSoftmax is an optional callable that adjusts the parameters of the greedyLayer after the training of each boosted node (e.g. learning rate, etc...)
+            - adjust_convSoftmax is an optional callable that adjusts the
+                parameters of the greedyLayer after the training of each boosted
+                node (e.g. learning rate, etc...)
         '''
 
 
@@ -318,19 +326,20 @@ class greedyNet(object):
         self.output_channels = self.net.layers[-1][1]['num_filters']
 
 
-    # -------------------
+    '''
+    #------------------------
     # UTILS METHODS:
-    # -------------------
-    # To import previously pretrained full or partial Greedy models:
-    #
-    #   - create a new GreedyNET or import existing one using
-    #     restore_greedyModel()
-    #
-    #   - in order not to overwrite the old model, call update_all_paths()
-    #     to update the name (and change the logs path)
-    #
-    #   - if subNets should be loaded, call load_subNets()
+    #------------------------
+    To import previously pretrained full or partial Greedy models:
 
+      - create a new GreedyNET or import existing one using
+        restore_greedyModel()
+
+      - in order not to overwrite the old model, call update_all_paths()
+        to update the name (and change the logs path)
+
+      - if subNets should be loaded, call load_subNets()
+    '''
 
     def update_all_paths(self, newname_model, new_path=None):
         '''

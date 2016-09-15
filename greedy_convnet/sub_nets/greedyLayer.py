@@ -1,6 +1,3 @@
-# ------------------------------
-# For the moment just a LogRegr
-# ------------------------------
 import numpy as np
 from copy import deepcopy
 import json

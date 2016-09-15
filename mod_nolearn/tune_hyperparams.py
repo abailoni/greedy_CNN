@@ -10,19 +10,34 @@ import various.utils as utils
 class tuneHyperParams(object):
     def __init__(self, hyperparameters, outputs, **kwargs):
         '''
+        IMPLEMENTED METHODS FOR THE CHOICE OF THE HYPER-PARAMETER VALUES:
+            - from a list of values (in order or shuffled) (M1)
+            - randomly in range [start,stop] with linear or logarithmic scale (M2)
+            - fixed value (M3)
+
+
         Inputs:
-          - hyperparameters: a tuple of lists in the form
+
+          - hyperparameters: a tuple of lists of the form
                 (
                     ['par_name', start, stop, 'linear', np.int8],
-                    ['par2_name', ...]
+                    ['par2_name', ...],
+                    ...
                 )
-          - outputs: key-names for outputs
+            Depending on the wanted method:
+                - for (M1): start is a list of values; stop=None; it accepts
+                    'shuffle' option as third element
+                - for (M2): pretty obvious
+                - for (M3): start is the fixed value; stop is None
 
-        Options:
+          - outputs: list with names of outputs
+
+        Optional parameters:
           - name
           - num_iterations
           - path_outputs
           - log_filename
+
         '''
         self.hyperparams = hyperparameters
         self.outputs = outputs
@@ -70,14 +85,14 @@ class tuneHyperParams(object):
 
     def fit_model(self, param_values, model_name):
         '''
-        This function should be replaced by a subclass. It fits the model with the
+        This method should be replaced by a subclass. It fits the model with the
         given values of hyperparameters and return the results.
 
         Inputs:
-          - param_values: dictionary with the selected hyperparameter values.
+          - param_values: dictionary with the randomly chosen hyperparameter values.
 
         Outputs:
-          - dictionary with results. It should contain the following key-words:
+          - dictionary with results. It could contain something like:
                * 'val_loss' (the best)
                * 'val_acc' (the best)
                * other stuff
