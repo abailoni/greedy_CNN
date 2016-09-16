@@ -24,7 +24,7 @@ The repository is mainly divided in two packages: *greedy_convnet* and *mod_nole
 
 ### greedy_convnet
 
-The packages contains the implementation of the greedy network, presenting the following features:
+The package contains the implementation of the greedy network, presenting the following features:
 
 - **Training new layers:** after initializing the main greedy network, new layers can be trained entirely or by selecting specific boosted nodes to be trained singularly
 - **Backup of nodes:** after each training of a new boosted node, the full greedy network and the singular nodes are saved on disk by default. Thus the training process can be stopped at any time, without loosing almost any data
@@ -137,8 +137,8 @@ greedy_network.preLoad(preLoad)
 # Train first layer:
 num_nodes = 13
 greedy_network.train_new_layer(
-    (train_boostedNode, num_nodes, greedyLayer_params),
-    (finetune_greedyLayer, boostedNode_params)
+    (train_boostedNode, num_nodes, boostedNode_params),
+    (finetune_greedyLayer, greedyLayer_params)
 )
 
 # Get some predictions:
@@ -191,7 +191,8 @@ tuning_hyperparams = tune_lrn_rate(
     plot=False
 )
 
-# Compute data:
+# Fit 20 models:
+tuning_hyperparams()
 tuning_hyperparams()
 
 
