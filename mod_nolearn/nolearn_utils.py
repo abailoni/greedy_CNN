@@ -35,6 +35,8 @@ Implemented:
  - print_weight_distribution:
       ...?
 
+ - compute loss w/o regularization
+
 # -----------------------------------------
 # -----------------------------------------
 '''
@@ -130,6 +132,9 @@ class pickle_model(object):
 
 
 class save_train_history(object):
+    '''
+    Needs improvements to detect new attributes in train_history_ automatically.
+    '''
     def __init__(self, filename, every=1, **kwargs):
         self.filename = filename
         self.iterations = 0
@@ -169,6 +174,13 @@ class save_train_history(object):
             info_tabulate['Train IoU'] = info['Train IoU']
         if 'Valid IoU' in info:
             info_tabulate['Valid IoU'] = info['Valid IoU']
+
+        if 'noReg_loss_train' in info:
+            info_tabulate['noReg_loss_train'] = info['noReg_loss_train']
+            info_tabulate['noReg_reg_train'] = info['noReg_reg_train']
+            info_tabulate['noReg_loss_valid'] = info['noReg_loss_valid']
+            info_tabulate['noReg_reg_valid'] = info['noReg_reg_valid']
+
         info_tabulate['lrn_rate'] = nn.update_learning_rate.get_value()
         # info_tabulate['update_beta1'] = nn.update_beta1.get_value()
         info_tabulate['dur'] = info['dur']
@@ -291,11 +303,30 @@ def print_weight_distribution(net, layer_name=None):
 
 
 
-
-
 def check_badLoss(net, train_history, train_outputs):
     if np.isnan(train_outputs[-1][0]) or np.isinf(train_outputs[-1][0]):
         warnings.warn("Training stopped, infinite loss")
         raise StopIteration
+
+class noReg_loss(object):
+    '''
+    Used at the end of an epoch.
+
+    Needs definitely improvements. Now it needs to be put at the beginning of 'on_epoch_finished' to be saved in log files.
+    '''
+    def __init__(self, X_small_train, y_small_train, X_small_valid, y_small_valid):
+        self.X_small_train = X_small_train
+        self.y_small_train = y_small_train
+        self.X_small_valid = X_small_valid
+        self.y_small_valid = y_small_valid
+
+    def __call__(self, net, train_history_):
+        # Not sure it works...
+        loss, reg = net.loss(self.X_small_train, self.y_small_train, reg=False)
+        net.train_history_[-1]['noReg_loss_train'] = loss
+        net.train_history_[-1]['noReg_reg_train'] = reg
+        loss, reg = net.loss(self.X_small_valid, self.y_small_valid, reg=False)
+        net.train_history_[-1]['noReg_loss_valid'] = loss
+        net.train_history_[-1]['noReg_reg_valid'] = reg
 
 

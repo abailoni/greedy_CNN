@@ -117,6 +117,7 @@ class boostedNode_ReLU(object):
         info.pop('on_epoch_finished', None)
         info.pop('on_batch_finished', None)
         info.pop('on_training_finished', None)
+        info.pop('noReg_loss', None)
         for key in [key for key in info if 'update_' in key]:
             info[key] = info[key].get_value().item()
         json.dump(info, file(info['logs_path']+'/info-net.txt', 'w'))

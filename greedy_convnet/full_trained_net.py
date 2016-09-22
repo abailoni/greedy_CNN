@@ -22,10 +22,10 @@ class fullTrainedNet(object):
         # -----------------
         # General attributes:
         # -----------------
+        self.num_conv_layers = num_conv_layers
         self.filter_size = kwargs.pop('filter_size', 3)
         self.num_filters = kwargs.pop('num_filters', 65)
         self.num_classes = kwargs.pop('num_classes', 2)
-        self.num_conv_layers = kwargs.pop('num_conv_layers', 5)
         self.xy_input = kwargs.pop('xy_input', (None, None))
         self.eval_size = kwargs.pop('eval_size', 0.2)
 
@@ -86,6 +86,15 @@ class fullTrainedNet(object):
             **kwargs
         )
 
+        # Set VGG16 layers as not trainable:
+        self.net._output_layer = self.net.initialize_layers()
+        self.net.layers_['conv1_1'].params[self.net.layers_['conv1_1'].W].remove('trainable')
+        self.net.layers_['conv1_1'].params[self.net.layers_['conv1_1'].b].remove('trainable')
+        self.net.layers_['conv1_2'].params[self.net.layers_['conv1_2'].W].remove('trainable')
+        self.net.layers_['conv1_2'].params[self.net.layers_['conv1_2'].b].remove('trainable')
+        self.net.layers_['conv1_1'].params[self.net.layers_['conv1_1'].W].remove('regularizable')
+        self.net.layers_['conv1_2'].params[self.net.layers_['conv1_2'].W].remove('regularizable')
+
 
         self.net.initialize()
 
@@ -103,6 +112,7 @@ class fullTrainedNet(object):
         info.pop('on_epoch_finished', None)
         info.pop('on_batch_finished', None)
         info.pop('on_training_finished', None)
+        info.pop('noReg_loss', None)
         for key in [key for key in info if 'update_' in key]:
             info[key] = info[key].get_value().item()
         utils.create_dir(self.BASE_PATH_LOG_MODEL)

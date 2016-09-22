@@ -96,6 +96,7 @@ class greedyLayer(object):
                 'merge_function': T.add,
                 'name': 'boosting_merge'}),
             (layers.NonlinearityLayer,{
+                'name': 'final_nonlinearity',
                 'incoming': 'boosting_merge',
                 'nonlinearity': segm_utils.softmax_segm}),
         ]
@@ -137,6 +138,7 @@ class greedyLayer(object):
         info.pop('on_epoch_finished', None)
         info.pop('on_batch_finished', None)
         info.pop('on_training_finished', None)
+        info.pop('noReg_loss', None)
         for key in [key for key in info if 'update_' in key]:
             info[key] = info[key].get_value().item()
         json.dump(info, file(info['logs_path']+'/info-net.txt', 'w'))
@@ -223,7 +225,10 @@ class MaskLayer(layers.Layer):
 
     def add_node(self):
         '''
-        Add one node and make all the others not trainable.
+        Add one node.
+
+        The first time nothing is done (just add new node, but still no active
+            ones in the main net)
         '''
         if self.first_iteration:
             self.first_iteration = False

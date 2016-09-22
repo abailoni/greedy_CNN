@@ -1,10 +1,9 @@
-
 from time import time
 import numpy as np
 
 
 from lasagne.objectives import aggregate
-from lasagne.layers import get_output
+from lasagne.layers import get_output, get_all_param_values
 from lasagne import regularization
 
 from nolearn.lasagne import NeuralNet
@@ -29,6 +28,10 @@ class modBatchIterator(BatchIterator):
 class modObjective(object):
     '''
     It gives a nicer implementation of L2 regularization.
+
+    Should use the default implementation and pass a parameter 'objective_L2' instead...
+    Anyway in the current way it can not be updated on-the-fly but it needs the
+    network to be recompiled. (it needs a shared variable in that case)
     '''
     def __init__(self,l2=0):
         self.l2 = l2
@@ -39,10 +42,8 @@ class modObjective(object):
                   aggregate=aggregate,
                   deterministic=False,
                   l1=0,
-                  l2=0,
                   get_output_kw=None):
-        # Mode:
-        l2 = self.l2
+        l2 = self.l2 # Mod
 
         if get_output_kw is None:
             get_output_kw = {}
@@ -58,8 +59,6 @@ class modObjective(object):
             loss += regularization.regularize_layer_params(
                 layers.values(), regularization.l2) * l2
         return loss
-
-
 
 
 from sklearn.cross_validation import KFold
@@ -146,7 +145,6 @@ class modNeuralNet(NeuralNet):
             if self.L2:
                 kwargs['objective'] = modObjective(self.L2)
 
-
         # Pickle:
         pickleModel_mode = kwargs.pop('pickleModel_mode', None)
         pickle_filename = kwargs.pop('pickle_filename', self.name+'.pickle')
@@ -182,6 +180,13 @@ class modNeuralNet(NeuralNet):
         kwargs['on_batch_finished'] += [check_badLoss]
 
 
+        # Add noReg_loss:
+        noReg_loss_data = kwargs.pop('noReg_loss', None)
+        if noReg_loss_data:
+            X_tr, y_tr, X_val, y_val = noReg_loss_data
+            # Needs to be put as first:
+            kwargs['on_epoch_finished'] = [noReg_loss(X_tr, y_tr, X_val, y_val)] + kwargs['on_epoch_finished']
+
         super(modNeuralNet, self).__init__(*args, **kwargs)
 
 
@@ -210,17 +215,43 @@ class modNeuralNet(NeuralNet):
             self.on_epoch_finished.remove(fun)
         self.on_epoch_finished += new_objects
 
-    def loss(self, X, y):
+    def loss(self, X, y, reg=True):
         '''
         Takes some data and return the averaged loss.
+
+        The regularization option is implemented only for L2.
         '''
+        # Compute loss:
+        # tick =  time()
+
         valid_outputs, batch_valid_sizes = [], []
         for Xb, yb in self.batch_iterator_test(X,y):
-                valid_outputs.append(
-                    self.apply_batch_func(self.eval_iter_, Xb, yb))
-                batch_valid_sizes.append(len(Xb))
+            valid_outputs.append(
+                self.apply_batch_func(self.eval_iter_, Xb, yb))
+            batch_valid_sizes.append(len(Xb))
         valid_outputs = np.array(valid_outputs, dtype=object).T
-        return np.average( [np.mean(row) for row in valid_outputs[0]]  , weights=batch_valid_sizes)
+        loss = np.average( [np.mean(row) for row in valid_outputs[0]]  , weights=batch_valid_sizes)
+
+        reg_term = None
+        if not reg and self.L2!=0.:
+            # Compute reg term and subtract it:
+            net_params = []
+            last_layer_name = self.layers[-1][1]['name']
+            net_params = get_all_param_values(self.layers_[last_layer_name], regularizable=True)
+
+            reg_term = 0
+            for param in net_params:
+                reg_term += np.sum(param*param)
+
+            reg_term *= self.L2
+            print reg_term
+            loss -= reg_term
+        # tock = time()
+        # print "Time: %g sec" %(tock-tick)
+        return loss, reg_term
+
+
+
 
     def train_loop(self, X, y, epochs=None):
         '''

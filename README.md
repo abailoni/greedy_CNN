@@ -197,7 +197,7 @@ tuning_hyperparams()
 
 
 # ----------------------------------
-# Compare all losses of the 10 computed models:
+# Compare all losses of the 20 computed models:
 # ----------------------------------
 from mod_nolearn.visualize import plot_fcts_PRO, plot_stuff, get_model_data
 path_tuning = "./tuning/tune_lrn_rate/"
