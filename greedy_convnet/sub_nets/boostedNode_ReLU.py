@@ -96,6 +96,11 @@ class boostedNode_ReLU(object):
             y_tensor_type = T.ltensor3,
             **kwargs
         )
+
+        # Set last layer as not regularizable:
+        self.net._output_layer = self.net.initialize_layers()
+        self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].remove('regularizable')
+
         # print "\n\n---------------------------\nCompiling regr network...\n---------------------------"
         # tick = time.time()
         self.net.initialize()

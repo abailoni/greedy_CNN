@@ -130,9 +130,11 @@ class greedyLayer_ReLU(object):
         self.net.layers_['conv1'].params[self.net.layers_['conv1'].b].remove('trainable')
         self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('trainable')
         self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].b].remove('trainable')
+
         self.net.layers_['conv1'].params[self.net.layers_['conv1'].W].remove('regularizable')
         self.net.layers_['conv1_newNode'].params[self.net.layers_['conv1_newNode'].W].remove('regularizable')
-
+        self.net.layers_['conv2'].params[self.net.layers_['conv2'].W].remove('regularizable')
+        self.net.layers_['conv2_newNode'].params[self.net.layers_['conv2_newNode'].W].remove('regularizable')
         # tick = time.time()
         self.net.initialize()
         # tock = time.time()

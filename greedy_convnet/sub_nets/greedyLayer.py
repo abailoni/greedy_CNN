@@ -14,6 +14,11 @@ from greedy_convnet import BatchIterator_Greedy
 
 
 class greedyLayer(object):
+    '''
+    UPDATES MISSING, DEPRECATED.
+
+    Use greedyLayer_ReLU instead.
+    '''
     def __init__(self,previous_layers,input_filters,**kwargs):
         info = deepcopy(kwargs)
         # -----------------

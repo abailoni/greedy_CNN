@@ -25,6 +25,7 @@ class BatchIterator_boostRegr(BatchIterator_Greedy):
         self.best_classifier = best_classifier
         self.objective_boost_loss = objective_boost_loss
         super(BatchIterator_boostRegr, self).__init__(*args, **kwargs)
+        self.residual_constant = 0.7
 
     def transform(self, Xb, yb):
         if yb is not None:
@@ -35,7 +36,7 @@ class BatchIterator_boostRegr(BatchIterator_Greedy):
                 C = pred_proba.shape[1]
                 pred_proba = pred_proba.transpose((0,2,3,1)).reshape((-1,C)).astype(np.float32)
                 yb_vect = yb.reshape((-1,))
-                prob_residuals = 1. - pred_proba[np.arange(yb_vect.shape[0]),yb_vect]
+                prob_residuals = 1. - pred_proba[np.arange(yb_vect.shape[0]),yb_vect] * self.residual_constant
                 self.objective_boost_loss.update_boosting_weights(prob_residuals)
             else:
                 shape = self.objective_boost_loss.shape
@@ -81,6 +82,11 @@ class categorical_crossentropy_segm_boost(object):
 
 
 class boostedNode(object):
+    '''
+    UPDATES MISSING, DEPRECATED.
+
+    Use boostedNode_ReLU instead.
+    '''
     def __init__(self,greedyLayer,**kwargs):
         info = deepcopy(kwargs)
         # --------------------------
