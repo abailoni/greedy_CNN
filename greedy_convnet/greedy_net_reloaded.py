@@ -1,6 +1,7 @@
 import time
 from copy import deepcopy, copy
 from collections import OrderedDict
+import numpy as np
 
 
 import theano.tensor as T
@@ -13,8 +14,9 @@ import pretr_nets.vgg16 as vgg16
 
 from mod_nolearn.segm import segmNeuralNet
 import mod_nolearn.segm.segm_utils as segm_utils
+from greedy_convnet.sub_nets import greedyLayer_reload as greedyLayer
 
-from greedy_convnet.sub_nets import greedyLayer, greedyLayer_ReLU, boostedNode, boostedNode_ReLU
+from greedy_convnet.sub_nets import boostedNode
 
 import various.utils as utils
 
@@ -57,18 +59,24 @@ class greedyNet(object):
 
             if 'name' not in layer_kw:
                 layer_kw['name'] = self._layer_name(layer_factory, i)
+                self.input_layers[i][1]['name'] = layer_kw['name']
 
             name = layer_kw['name']
             self.names.append(name)
             layer_dict = {}
             self.layers_info[name] = layer_dict
 
-            # Check if can be trained greedily:
+            # Check if it can be trained greedily:
             layer_dict['trained_greedily'] = False
             layer_dict['trained'] = False
-            if layer_factory==layers.Conv2DLayer: ##### MOD!!! #####
+            if layer_factory==layers.Conv2DLayer:
                 layer_dict['trained_greedily'] = True
-
+                layer_dict['type'] = "conv"
+            elif layer_factory==layers.TransposedConv2DLayer:
+                layer_dict['trained_greedily'] = True
+                layer_dict['type'] = "trans_conv"
+            else:
+                layer_dict['type'] = None # other layer-type
 
             # Check the immediate requirements of the layer:
             if layer_factory==layers.InputLayer:
@@ -82,6 +90,7 @@ class greedyNet(object):
                 else:
                     layer_dict['req'] = [self.names[i-1]]
 
+
         # -------------------------------
         # Contruct all possible ways from input to output:
         # -------------------------------
@@ -93,11 +102,13 @@ class greedyNet(object):
         # -------------------------------
         # Other passed arguments:
         # -------------------------------
-        self.greedy_layer_class = greedyLayer_ReLU
-        self.boosted_node_class = boostedNode_ReLU
+        self.greedy_layer_class = greedyLayer
+        self.boosted_node_class = boostedNode
         self.model_name = kwargs.pop('model_name', 'greedyNET')
         self.BASE_PATH_LOG = kwargs.pop('BASE_PATH_LOG', "./logs/")
         self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
+
+        self.subNets = {}
 
 
 
@@ -167,18 +178,18 @@ class greedyNet(object):
             ['input', 'conv2', 'conv3', 'out']
         ]
 
-        Starting from the first way, 'conv1' will be trained. Then we try to
+        Starting from the first way, 'conv1' is trained. Then we try to
         train 'conv3', but 'conv2' is in the requirements and it has not been
         trained.
         Going then to the next way, 'conv2' is trained. Finally we can also
-        train 'conv3'. The output layer is reached, thus the process is stopped.
+        train 'conv3'. The output layer is reached, thus the process stops.
         '''
         if not kwargs_finetune:
             kwargs_finetune = {}
         if not kwargs_nodes:
             kwargs_nodes = {}
 
-        # Get informations aboout next greedy step:
+        # Get informations about next greedy step:
         fixed_input_layers, trained_layer = self._get_next_step()
 
         # Detect informations about the layer to be trained:
@@ -198,7 +209,7 @@ class greedyNet(object):
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
         if num_pretrained_nodes==0:
             # Compile first node:
-            self.init_node(trained_layer, fixed_input_layers, kwargs_nodes, filters=list_boost_filters[0], node=0)
+            self.init_boostedPerceptron(trained_layer, fixed_input_layers, kwargs_nodes, filters=list_boost_filters[0], node=0)
 
             # Train first node: (and backup node)
             self.train_node(trained_layer, fit_nodes, node=0)
@@ -207,19 +218,19 @@ class greedyNet(object):
             self.insert_weights(trained_layer, node=0)
 
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-        # Training of the other nodes:
+        # Training of other nodes:
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-        for num_node, num_filters in enumerate(list_boost_filters[num_pretrained_nodes+1:]):
+        for num_perceptron, num_filters in enumerate(list_boost_filters[num_pretrained_nodes+1:]):
 
             # Compile new boostedNode:
-            self.init_node(trained_layer, fixed_input_layers, kwargs_nodes, filters=num_filters, node=num_node)
+            self.init_boostedPerceptron(trained_layer, fixed_input_layers, kwargs_nodes, filters=num_filters, node=num_perceptron)
 
             # Train and insert weights:
-            self.train_node(trained_layer, fit_nodes, node=num_node)
-            self.insert_weights(trained_layer, node=num_node)
+            self.train_node(trained_layer, fit_nodes, node=num_perceptron)
+            self.insert_weights(trained_layer, node=num_perceptron)
 
             # Finetune active nodes in greedyLayer:
-            self.finetune_greedyLayer(trained_layer, finetune, node=num_node)
+            self.finetune_greedyLayer(trained_layer, finetune, node=num_perceptron)
 
         # ----------------------------
         # Set new layer and all the following not-greedily-trainable as trained:
@@ -229,6 +240,10 @@ class greedyNet(object):
 
 
     def _get_next_step(self):
+        '''
+        Returns the sequence of fixed layers necessary to train the next
+        greedy step and the name of the trained layer.
+        '''
         way_num = self.selected_way
         current_way = self.ways_to_output[way_num]
         info = self.layers_info
@@ -246,6 +261,7 @@ class greedyNet(object):
                         if not info[req]['trained']:
                             self.selected_way = (self.selected_way+1)%self.num_ways
                             return self._get_next_step()
+
                     num_inputs = i
                     break
 
@@ -267,159 +283,161 @@ class greedyNet(object):
 
     def _init_boosting(self, trained_layer, boost_filters):
         '''
-        Detect also size and adjust the GrTruth...
+        Compute how to boosting-train the filters in the selected trained_layer.
+
+        Furthermore, it also detects size and adjust the GrTruth
         '''
+        # Check if spatial size has been saved:
+        if "output_shape" not in self.layers_info[trained_layer]:
+            self._compute_all_spatial_sizes()
+
+        # Get num filters layer:
+        out_layer = self.whole_net.layers_[trained_layer]
+        if hasattr(out_layer, 'num_filters'):
+            num_filters = out_layer.num_filters
+        else:
+            raise ValueError("The greeedy-trained layer do not have a defined number of filters")
+
+        list_boost_filters = [boost_filters]*(int(num_filters)/int(boost_filters))
+        list_boost_filters += [int(num_filters)%int(boost_filters)]
 
 
-    # def __init__(self, num_VGG16_layers, mod=None, **kwargs):
+        # MISSING...? Ground truth rescaling?
+
+        return np.array(list_boost_filters)
+
+
+    def _compute_all_spatial_sizes(self):
+        '''
+        Compile the input network and save the output shapes of all layers.
+        '''
+        layers = self.input_layers
+        self.whole_net = segmNeuralNet(layers=layers)
+        self.whole_net.initialize_layers()
+        for layer_name in self.whole_net.layers_:
+            if "output_shape" in self.layers_info[layer_name]:
+                self.layers_info[layer_name]["output_shape"] = self.whole_net.layers_[layer_name].get_output_shape()[2:]
+
+
+    def init_greedyLayer(self, trained_layer, fixed_input_layers, list_boost_filters, kwargs_finetune):
+        # If not preLoaded, initialize new network:
+        if trained_layer not in self.subNets:
+            logs_path = self.BASE_PATH_LOG_MODEL+trained_layer+'/'
+            utils.create_dir(logs_path)
+            params = deepcopy(kwargs_finetune)
+            params['log_frequency'] = 1
+            params['log_filename'] = 'log.txt'
+            params['subLog_filename'] = 'sub_log.txt'
+            # params['pickleModel_mode'] = 'on_epoch_finished'
+            # params['trackWeights_pdfName'] = 'weights.txt'
+            params['pickle_filename'] = 'model.pickle'
+            params['logs_path'] = logs_path
+
+            idx_layer = self.names.index(trained_layer)
+            layer_args = self.input_layers[idx_layer][1]
+
+            self.subNets[trained_layer] = self.greedy_layer_class(
+                fixed_input_layers,
+                self.layers_info,
+                trained_layer,
+                layer_args,
+                list_boost_filters,
+                **params
+            )
+
+    def init_boostedPerceptron(self, trained_layer, fixed_input_layers, filters_in_perceptron, kwargs_boostedPerceptron):
+        # If not preLoaded, initialize new node:
+        perceptron_name = "perceptron_"+trained_layer
+        if perceptron_name not in self.subNets:
+            params = deepcopy(kwargs_boostedPerceptron)
+            logs_path = self.BASE_PATH_LOG_MODEL+perceptron_name+'/'
+            utils.create_dir(logs_path)
+            params['log_frequency'] = 1
+            params['subLog_filename'] = 'sub_log.txt'
+            params['log_filename'] = 'log.txt'
+            # params['pickleModel_mode'] = 'on_epoch_finished'
+            # params['trackWeights_pdfName'] = 'weights.txt'
+            params['pickle_filename'] = 'model.pickle'
+            params['logs_path'] = logs_path
+
+            self.subNets[perceptron_name] = self.boosted_node_class(
+                fixed_input_layers,
+                self.layers_info,
+                trained_layer,
+                layer_args,
+                filters_in_perceptron,
+                **params
+            )
+
+
+    # def train_new_layer(self,
+    #         (fit_boosted_nodes, num_nodes, kwargs_boosted_nodes),
+    #         (finetune_nodes, kwargs_finetune_nodes),
+    #         adjust_convSoftmax=None):
     #     '''
-    #     Initialize a network that uses just the first layers of VGG16.
+    #     It trains a new layer of the greedy network.
 
     #     Inputs:
-    #      - how many layers to keep of VGG16 (temporary max=2 due to MaxPooling layers)
 
+    #         - tuple (fit_boosted_nodes, num_nodes, kwargs_boosted_nodes)
+    #             where fit_boosted_nodes is a callable function of type fun(net)
+    #             that trains one node and return the net
+    #             (where net is an instance of nolearn NeuralNet)
 
-    #     Options and parameters:
+    #         - tuple (finetune_nodes, kwargs_finetune_nodes)
+    #         where finetune_nodes is a callable training and finetuning the computed nodes
 
-    #      - mod: the accepted options are 'basic' or 'ReLU'. With 'basic', the
-    #         greedy network uses a softmax nonlinearity that is later transformed
-    #         in a ReLU nonlinearity. With 'ReLU', the rectify linearity is used
-    #         from the beginning (check boostedNode_ReLU)
-    #      - eval_size: percentage between training and validation data for nolearn
-    #         NeuralNet class
-    #      - BASE_PATH_LOG
-    #      - model_name
-    #      - further modNeuralNet parameters
-
-
+    #         - adjust_convSoftmax is an optional callable that adjusts the
+    #             parameters of the greedyLayer after the training of each boosted
+    #             node (e.g. learning rate, etc...)
     #     '''
-    #     # ------------------------------------
-    #     # Compile network with vgg16 layers:
-    #     # ------------------------------------
-    #     self.num_layers = 0
-    #     if mod=='basic':
-    #         self.greedy_layer_class = greedyLayer
-    #         self.boosted_node_class = boostedNode
-    #     elif mod=='ReLU':
-    #         self.greedy_layer_class = greedyLayer_ReLU
-    #         self.boosted_node_class = boostedNode_ReLU
-    #     else:
-    #         raise ValueError("A mode is required. Accepted types: 'basic', 'ReLU'")
-
-    #     self.num_VGG16_layers = int(num_VGG16_layers)
-    #     self.eval_size =  kwargs.pop('eval_size',0.)
-    #     self.model_name = kwargs.pop('model_name', 'greedyNET')
-    #     self.BASE_PATH_LOG = kwargs.pop('BASE_PATH_LOG', "./logs/")
 
 
-    #     self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
-    #     self.layers = vgg16.nolearn_vgg16_layers()[:self.num_VGG16_layers+1]
-    #     fixed_kwargs = {
-    #         'objective_loss_function': segm_utils.categorical_crossentropy_segm,
-    #         'y_tensor_type': T.ltensor3,
-    #         'eval_size': self.eval_size,
-    #         'regression': False,
-    #         'logs_path': self.BASE_PATH_LOG_MODEL
-    #     }
-    #     self.net_kwargs = kwargs.copy()
-    #     self.net_kwargs.update(fixed_kwargs)
-    #     self.net = segmNeuralNet(
-    #         layers=self.layers,
-    #         scores_train=[('trn pixelAcc', segm_utils.pixel_accuracy)],
-    #         scores_valid=[('val pixelAcc', segm_utils.pixel_accuracy)],
-    #         **self.net_kwargs
-    #     )
+    #     # ------------------------------------------------
+    #     # Loop for more subsets of nodes: (fixed to one for now)
+    #     #
+    #     # (to be improved with parallelization)
+    #     # ------------------------------------------------
+    #     num_subsets = 1
+    #     nodes_subsets = []
+    #     for indx_subset in range(num_subsets):
+    #         # -------------------------------------------
+    #         # Fit first node and initialize greedyLayer:
+    #         # -------------------------------------------
+    #         greedyLayer_name = "cnv_L%d_G%d"%(self.num_layers,indx_subset)
+    #         self.init_greedyLayer(greedyLayer_name, kwargs_finetune_nodes, num_nodes)
 
-    #     # ---------------------
-    #     # Initialize net:
-    #     # ---------------------
-    #     # print "Compiling greedy network..."
-    #     # tick = time.time()
-    #     self.net.initialize()
-    #     # tock = time.time()
-    #     # print "Done! (%f sec.)\n\n\n" %(tock-tick)
+    #         boostedNode_name = "regr_L%dG%dN%d" %(self.num_layers,indx_subset,0)
+    #         self.init_boostedPerceptron(boostedNode_name, kwargs_boosted_nodes, greedyLayer_name)
+    #         train_flag = self.train_boostedNode(boostedNode_name,  fit_boosted_nodes, indx_subset, 0)
 
+    #         # Check if first node was trained or it was loaded
+    #         # but not inserted in the main greedyLayer:
+    #         if train_flag or self.convSoftmax[greedyLayer_name].net.layers_['mask'].first_iteration:
+    #             self.convSoftmax[greedyLayer_name].insert_weights(self.regr[boostedNode_name])
 
-    #     # --------------------
-    #     # Copy vgg16 weights:
-    #     # --------------------
-    #     self.net = vgg16.nolearn_insert_weights_vgg16(self.net,self.num_VGG16_layers)
+    #         # -----------------------------------------
+    #         # Boosting loop:
+    #         # -----------------------------------------
+    #         for num_node in range(1,num_nodes):
 
+    #             # Fit new boostedNode:
+    #             boostedNode_name = "regr_L%dG%dN%d" %(self.num_layers,indx_subset,num_node)
+    #             self.init_boostedPerceptron(boostedNode_name, kwargs_boosted_nodes, greedyLayer_name)
+    #             train_flag = self.train_boostedNode(boostedNode_name,  fit_boosted_nodes, indx_subset, num_node)
 
-    #     self.output_channels = self.net.layers[-1][1]['num_filters']
-    #     self.last_layer_name = self.net.layers[-1][1]['name']
-    #     self.regr, self.convSoftmax = {}, {}
-    #     self.preLoad = {}
+    #             # Insert in greedyLayer:
+    #             if train_flag or self.check_insert_weights(greedyLayer_name, num_node):
+    #                 self.convSoftmax[greedyLayer_name].insert_weights(self.regr[boostedNode_name])
 
+    #             # Finetune active nodes in greedyLayer:
+    #             self.finetune_greedyLayer(greedyLayer_name, indx_subset, finetune_nodes, num_node)
 
-    def train_new_layer(self,
-            (fit_boosted_nodes, num_nodes, kwargs_boosted_nodes),
-            (finetune_nodes, kwargs_finetune_nodes),
-            adjust_convSoftmax=None):
-        '''
-        It trains a new layer of the greedy network.
+    #         nodes_subsets.append(self.convSoftmax[greedyLayer_name])
 
-        Inputs:
-
-            - tuple (fit_boosted_nodes, num_nodes, kwargs_boosted_nodes)
-                where fit_boosted_nodes is a callable function of type fun(net)
-                that trains one node and return the net
-                (where net is an instance of nolearn NeuralNet)
-
-            - tuple (finetune_nodes, kwargs_finetune_nodes)
-            where finetune_nodes is a callable training and finetuning the computed nodes
-
-            - adjust_convSoftmax is an optional callable that adjusts the
-                parameters of the greedyLayer after the training of each boosted
-                node (e.g. learning rate, etc...)
-        '''
-
-
-        # ------------------------------------------------
-        # Loop for more subsets of nodes: (fixed to one for now)
-        #
-        # (to be improved with parallelization)
-        # ------------------------------------------------
-        num_subsets = 1
-        nodes_subsets = []
-        for indx_subset in range(num_subsets):
-            # -------------------------------------------
-            # Fit first node and initialize greedyLayer:
-            # -------------------------------------------
-            greedyLayer_name = "cnv_L%d_G%d"%(self.num_layers,indx_subset)
-            self.init_greedyLayer(greedyLayer_name, kwargs_finetune_nodes, num_nodes)
-
-            boostedNode_name = "regr_L%dG%dN%d" %(self.num_layers,indx_subset,0)
-            self.init_boostedNode(boostedNode_name, kwargs_boosted_nodes, greedyLayer_name)
-            train_flag = self.train_boostedNode(boostedNode_name,  fit_boosted_nodes, indx_subset, 0)
-
-            # Check if first node was trained or it was loaded
-            # but not inserted in the main greedyLayer:
-            if train_flag or self.convSoftmax[greedyLayer_name].net.layers_['mask'].first_iteration:
-                self.convSoftmax[greedyLayer_name].insert_weights(self.regr[boostedNode_name])
-
-            # -----------------------------------------
-            # Boosting loop:
-            # -----------------------------------------
-            for num_node in range(1,num_nodes):
-
-                # Fit new boostedNode:
-                boostedNode_name = "regr_L%dG%dN%d" %(self.num_layers,indx_subset,num_node)
-                self.init_boostedNode(boostedNode_name, kwargs_boosted_nodes, greedyLayer_name)
-                train_flag = self.train_boostedNode(boostedNode_name,  fit_boosted_nodes, indx_subset, num_node)
-
-                # Insert in greedyLayer:
-                if train_flag or self.check_insert_weights(greedyLayer_name, num_node):
-                    self.convSoftmax[greedyLayer_name].insert_weights(self.regr[boostedNode_name])
-
-                # Finetune active nodes in greedyLayer:
-                self.finetune_greedyLayer(greedyLayer_name, indx_subset, finetune_nodes, num_node)
-
-            nodes_subsets.append(self.convSoftmax[greedyLayer_name])
-
-        # Add new greedy layer:
-        self._insert_new_layer(nodes_subsets[0])
-        self.pickle_greedyNET()
+    #     # Add new greedy layer:
+    #     self._insert_new_layer(nodes_subsets[0])
+    #     self.pickle_greedyNET()
 
 
     def check_insert_weights(self, greedyLayer_name, active_nodes):
@@ -434,44 +452,9 @@ class greedyNet(object):
                 insert_weights = True if active_nodes>=load[2] else False #MOD
         return insert_weights
 
-    def init_boostedNode(self, net_name, kwargs, convSoftmax_name):
-        # If not preLoaded, initialize new node:
-        if net_name not in self.regr:
-            params = deepcopy(kwargs)
-            logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
-            utils.create_dir(logs_path)
-            params['log_frequency'] = 1
-            params['subLog_filename'] = 'sub_log.txt'
-            params['log_filename'] = 'log.txt'
-            # params['pickleModel_mode'] = 'on_epoch_finished'
-            params['pickle_filename'] = 'model.pickle'
-            params['trackWeights_pdfName'] = 'weights.txt'
-            params['logs_path'] = logs_path
 
-            self.regr[net_name] = self.boosted_node_class(
-                self.convSoftmax[convSoftmax_name],
-                **params
-            )
 
-    def init_greedyLayer(self, net_name, kwargs, num_nodes):
-        # If not preLoaded, initialize new network:
-        if net_name not in self.convSoftmax:
-            logs_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
-            utils.create_dir(logs_path)
-            params = deepcopy(kwargs)
-            params['log_frequency'] = 1
-            params['log_filename'] = 'log.txt'
-            params['subLog_filename'] = 'sub_log.txt'
-            # params['pickleModel_mode'] = 'on_epoch_finished'
-            params['trackWeights_pdfName'] = 'weights.txt'
-            params['pickle_filename'] = 'model.pickle'
-            params['logs_path'] = logs_path
-            self.convSoftmax[net_name] = self.greedy_layer_class(
-                self.net,
-                self.output_channels,
-                num_nodes=num_nodes,
-                **params
-            )
+
 
     def train_boostedNode(self, net_name, fit_routine, idx_net2, num_node):
         train = True
