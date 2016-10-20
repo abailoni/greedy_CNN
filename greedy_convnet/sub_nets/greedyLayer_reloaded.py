@@ -21,10 +21,11 @@ class greedyLayer_reload(object):
             name_trained_layer,
             trained_layer_args,
             list_boost_filters,
+            GT_output_shape,
             **kwargs):
-        info = deepcopy(kwargs)
+        # info = deepcopy(kwargs)
         # -----------------
-        # General attributes:
+        # Attributes:
         # -----------------
         self.init_weight = trained_layer_args.pop('init_weight', 1e-3)
         self.filter_size1 = trained_layer_args.pop('filter_size', 7)
@@ -32,34 +33,26 @@ class greedyLayer_reload(object):
         self.num_filters1 = trained_layer_args.pop('num_filters', 5)
 
         self.fixed_input_layers = fixed_input_layers
+        self.GT_output_shape = GT_output_shape
 
         kwargs['name'] = "greedy_"+name_trained_layer
         self.num_classes = kwargs.pop('num_classes', 2)
-        self.batch_size = kwargs.pop('batch_size', 100)
+        self.batch_size = kwargs.pop('batch_size', 20)
         self.batchShuffle = kwargs.pop('batchShuffle', True)
         self.eval_size = kwargs.pop('eval_size', 0.1)
         self.active_perceptrons = 0
         self.active_nodes = 0
 
-        # Starting filters for each perceptron:
-        self.nodes_partition = [np.sum(list_boost_filters[:i]) for i in range(len(list_boost_filters)+1)]
-        print self.nodes_partition
-        # Not really useful...
-        # self.filters_per_perceptron = list_boost_filters[0]
-        # self.filters_last_perceptron = list_boost_filters[-1]
-
-
         # Checks:
         if "train_split" in kwargs:
             raise ValueError('The option train_split is not used. Use eval_size instead.')
 
-
-        # - Find total number of filters
-        # - modify structure NN (no longer use separate)
-        # - output shape for GT
-
+        # Starting filters for each perceptron:
+        self.nodes_partition = [np.sum(list_boost_filters[:i]) for i in range(len(list_boost_filters)+1)]
+        print self.nodes_partition
 
         customBatchIterator = BatchIterator_Greedy(
+            GT_output_shape=self.GT_output_shape,
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
         )
@@ -77,7 +70,7 @@ class greedyLayer_reload(object):
                     'num_filters': tot_num_filters,
                     'filter_size': self.filter_size1,
                     'pad':'same',
-                    'W': Normal(std=1000),
+                    # 'W': Normal(std=1000),
                     'nonlinearity': rectify}),
                 (MaskLayer,{
                     'name': 'mask',
@@ -170,12 +163,10 @@ class greedyLayer_reload(object):
     def insert_weights(self, boostedPerceptron):
         '''
         In order the following operations are done:
-         - Update mask main part: activate another node
-         - Copy the 'new_node' weights in the main part of the net
-         - Copy the boostedPerceptron weights in the 'new_node' part
-         - Recompile the net
+         - Update mask main part: activate another perceptron
+         - Copy the boostedPerceptron weights in the greedyLayer
 
-        Structure of parameters:
+        Structure of parameters: (check lasagne doc)
          - W1: (num_classes*num_filters1*num_nodes, num_inputs, filter_length1)
          - b1: (num_classes*num_filters1*num_nodes, )
          - W2: (num_classes, num_classes*num_filters1*num_nodes, filter_length2)
@@ -234,7 +225,7 @@ class MaskLayer(layers.Layer):
             raise ValueError("List of filters not passed for boosting training")
 
         super(MaskLayer, self).__init__(incoming, *args, **kwargs)
-        self.active_perpectrons = 0
+        self.active_perceptrons = 0
         self.active_nodes = self.add_param(np.ones(1, dtype=np.int8), (1,), name='active_nodes', trainable=False, regularizable=False)
         #
         self.active_nodes.set_value([0])
@@ -247,8 +238,8 @@ class MaskLayer(layers.Layer):
         The first time nothing is done (just add new node, but still no active
             ones in the main net)
         '''
-        self.active_perpectrons += 1
-        self.active_nodes.set_value([self.list_boost_filters[:self.active_perpectrons].sum()])
+        self.active_perceptrons += 1
+        self.active_nodes.set_value([self.list_boost_filters[:self.active_perceptrons].sum()])
 
 
     def get_output_for(self, input, **kwargs):

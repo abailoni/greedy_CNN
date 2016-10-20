@@ -3,6 +3,26 @@ from mod_nolearn import BatchIterator
 
 class BatchIterator_Greedy(BatchIterator):
     '''
+    It resizes the GT accordingly
+
+    Inputs: (in addition to usual ones of BatchIterator)
+        - 'GT_output_shape'
+    '''
+
+    def __init__(self, GT_output_shape, *args, **kwargs):
+        self.GT_output_shape = GT_output_shape
+        super(BatchIterator_Greedy, self).__init__(*args, **kwargs)
+
+    def transform(self, Xb, yb):
+        # Scale down the ground truth:
+        if yb.shape[-2:]!=self.GT_output_shape:
+            pass
+
+        return Xb, yb
+
+
+class BatchIterator_Greedy_old(BatchIterator):
+    '''
     It replaces the batch inputs Xb with the output of the previous computed layers.
 
     Inputs: (in addition to usual ones of BatchIterator)
@@ -21,4 +41,3 @@ class BatchIterator_Greedy(BatchIterator):
             # print "Tock: %g s" %(time.time()-tick)
 
         return Xb, yb
-
