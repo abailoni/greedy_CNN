@@ -11,94 +11,84 @@ from lasagne.init import Normal
 import mod_nolearn.segm.segm_utils as segm_utils
 from mod_nolearn.segm import segmNeuralNet
 from greedy_convnet import BatchIterator_Greedy
-
+import various.utils as utils
 
 class boostedPerceptron(object):
     def __init__(self,
             fixed_input_layers,
             layers_info,
             name_trained_layer,
-            trained_layer_args,
             filters_in_perceptron,
             greedyLayer,
-            **kwargs):
-        # info = deepcopy(kwargs)
+            fixed_weights,
+            **greedy_kwargs):
+        # info = deepcopy(greedy_kwargs)
         # --------------------------
-        # Inherited by convSoftmax:
+        # Inherited by greedyLayer:
         # --------------------------
-        self.filter_size1 = greedyLayer.filter_size1
-        self.filter_size2 = greedyLayer.filter_size2
-        self.num_filters1 = greedyLayer.num_filters1
+        self.filter_size = greedyLayer.filter_size
         self.num_classes = greedyLayer.num_classes
         self.eval_size = greedyLayer.eval_size
         self.init_weight = greedyLayer.init_weight
         self.best_classifier = greedyLayer.net if greedyLayer.active_perceptrons!=0 else None
-        self.GT_output_shape = greedyLayer.GT_output_shape
+        self.layer_kwargs = deepcopy(greedyLayer.layer_kwargs)
+        self.layer_kwargs['num_filters'] = filters_in_perceptron
+        self.layer_output_shape = greedyLayer.layer_output_shape
+        self.batch_size = greedyLayer.batch_size
+        self.batchShuffle = greedyLayer.batchShuffle
+        self.FULLNET_kwargs = greedyLayer.FULLNET_kwargs
+        if self.FULLNET_kwargs:
+            greedy_kwargs = utils.join_dict(self.FULLNET_kwargs, greedy_kwargs)
 
         # -----------------
         # Own attributes:
         # -----------------
         self.filters_in_perceptron = filters_in_perceptron
-        kwargs['name'] = "greedy_"+name_trained_layer+"_perceptron"
-        self.batch_size = kwargs.pop('batch_size', 20)
-        self.batchShuffle = kwargs.pop('batchShuffle', True)
+        greedy_kwargs['name'] = "greedy_"+name_trained_layer+"_perceptron"
 
         # -----------------
         # Input processing:
         # -----------------
-        out_shape = list(layers_info[name_trained_layer]['output_shape'])
+        out_spatial_shape = list(layers_info[name_trained_layer]['output_shape'])[-2:]
 
-        print out_shape
-        out_shape[0] = 1000
-        print "ATTENTION: first dimension is fake..."
-
+        out_shape = [self.batch_size]+out_spatial_shape
         objective_loss_function = categorical_crossentropy_segm_boost(out_shape)
 
         customBatchIterator = BatchIterator_boostRegr(
             self.best_classifier,
             objective_loss_function,
-            GT_output_shape=self.GT_output_shape,
+            layer_output_shape=self.layer_output_shape,
             batch_size=self.batch_size,
             shuffle=self.batchShuffle,
         )
 
+
         # -----------------
         # Building NET:
         # -----------------
+        self.layer_kwargs['name'] = 'greedyConv_1'
         self.layer_type = layers_info[name_trained_layer]['type']
         netLayers = deepcopy(fixed_input_layers)
         if self.layer_type=="conv":
             netLayers += [
-                (layers.Conv2DLayer, {
-                    'name': "greedyConv_1",
-                    'num_filters': filters_in_perceptron,
-                    'filter_size': self.filter_size1,
-                    'pad':'same',
-                    # 'W': Normal(std=1000),
-                    'nonlinearity': rectify}),
+                (layers.Conv2DLayer, self.layer_kwargs),
                 (layers.Conv2DLayer, {
                     'name': 'greedyConv_2',
                     'num_filters': self.num_classes,
-                    'filter_size': self.filter_size2,
+                    'filter_size': self.filter_size,
                     'pad':'same',
-                    # 'W': Normal(std=1000),
+                    'W': Normal(std=self.init_weight),
                     'nonlinearity': segm_utils.softmax_segm})]
 
         elif self.layer_type=="trans_conv":
             netLayers += [
-                (layers.TrasposedConv2DLayer, {
-                    'name': "greedyConv_1",
-                    'num_filters': filters_in_perceptron,
-                    'filter_size': self.filter_size1,
-                    'crop': trained_layer_args['crop'],  ## check if crop is always there
-                    # 'W': Normal(std=1000),
-                    'nonlinearity': rectify}),
+                (layers.TrasposedConv2DLayer, self.layer_kwargs),
                 (layers.TrasposedConv2DLayer, {
                     'name': 'greedyConv_2',
                     'num_filters': self.num_classes,
-                    'filter_size': self.filter_size2,
-                    'crop': trained_layer_args['crop'],  ## check if crop is always there
-                    # 'W': Normal(std=1000),
+                    'filter_size': self.filter_size,
+                    'crop': self.layer_kwargs['crop'],
+                    'W': Normal(std=self.init_weight),
                     'nonlinearity': segm_utils.softmax_segm})]
 
         self.net = segmNeuralNet(
@@ -108,14 +98,15 @@ class boostedPerceptron(object):
             objective_loss_function = objective_loss_function,
             scores_train = [('trn pixelAcc', segm_utils.pixel_accuracy)],
             y_tensor_type = T.ltensor3,
-            **kwargs
+            eval_size=self.eval_size,
+            regression = False,
+            **greedy_kwargs
         )
 
         self.net._output_layer = self.net.initialize_layers()
 
         # Set all fixed layers as not trainable & reg:
         fixed_layers_names = [layer[1]['name'] for layer in fixed_input_layers]
-        print fixed_layers_names
         for name in fixed_layers_names:
             if layers_info[name]['type']=='conv' or layers_info[name]['type']=='trans_conv':
                 self.net.layers_[name].params[self.net.layers_[name].W].remove('trainable')
@@ -127,6 +118,10 @@ class boostedPerceptron(object):
 
 
         self.net.initialize()
+
+
+        self.insert_weights_fixedLayers(fixed_weights)
+
 
         # # -------------------------------------
         # # SAVE INFO NET:
@@ -149,6 +144,27 @@ class boostedPerceptron(object):
         # json.dump(info, file(info['logs_path']+'/info-net.txt', 'w'))
 
 
+    def insert_weights_fixedLayers(self, fixed_weights):
+        '''
+        The function inserts the weights
+
+        fixed_weights
+            type: dictionary
+            value: key->layer_name; content -> list of layer_paramsValues
+        '''
+        print [key for key in self.net.layers_]
+        for layer in self.net.layers_:
+            if layer not in ["greedyConv_1", "greedyConv_2", "mask"]:
+                params_fixed_layer = self.net.layers_[layer].get_params()
+                if layer in fixed_weights:
+                    for i, param in enumerate(params_fixed_layer):
+                        param.set_value(fixed_weights[layer][i])
+                elif len(params_fixed_layer)!=0:
+                    raise ValueError("Weights of fixed layer %s not available!" %(layer))
+
+
+
+
 class BatchIterator_boostRegr(BatchIterator_Greedy):
     '''
     Given a batch of images and the targets, it updates the boosting weights given
@@ -162,8 +178,11 @@ class BatchIterator_boostRegr(BatchIterator_Greedy):
         self.residual_constant = 0.8
 
     def transform(self, Xb, yb):
-        if yb is not None:
+        # First of all rezise the ground truth to the right scale:
+        Xb, yb = super(BatchIterator_boostRegr, self).transform(Xb, yb)
 
+
+        if yb is not None:
             if self.best_classifier:
                 # Updates boosting weights:
                 pred_proba = self.best_classifier.predict_proba(Xb) #[N,C,x,y]
@@ -175,7 +194,6 @@ class BatchIterator_boostRegr(BatchIterator_Greedy):
             else:
                 shape = self.objective_boost_loss.shape
                 self.objective_boost_loss.update_boosting_weights(np.ones((shape,),dtype=np.float32))
-        Xb, yb = super(BatchIterator_boostRegr, self).transform(Xb, yb)
         return Xb, yb
 
 from theano.tensor.nnet import categorical_crossentropy

@@ -46,7 +46,7 @@ from collections import OrderedDict
 import warnings
 import matplotlib.pyplot as plt
 
-
+from theano.compile.sharedvalue import SharedVariable
 from lasagne.layers import get_all_param_values
 
 from mod_nolearn.visualize import plot_fcts_show, plot_fcts
@@ -181,7 +181,10 @@ class save_train_history(object):
             info_tabulate['noReg_loss_valid'] = info['noReg_loss_valid']
             info_tabulate['noReg_reg_valid'] = info['noReg_reg_valid']
 
-        info_tabulate['lrn_rate'] = nn.update_learning_rate.get_value()
+        if isinstance(nn.update_learning_rate, SharedVariable):
+            info_tabulate['lrn_rate'] = nn.update_learning_rate.get_value()
+        else:
+            info_tabulate['lrn_rate'] = nn.update_learning_rate
         # info_tabulate['update_beta1'] = nn.update_beta1.get_value()
         info_tabulate['dur'] = info['dur']
 

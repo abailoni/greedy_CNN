@@ -1,5 +1,7 @@
 import time
-from copy import deepcopy
+from copy import deepcopy, copy
+from collections import OrderedDict
+
 
 import theano.tensor as T
 import lasagne.layers as layers
@@ -418,6 +420,139 @@ class greedyNet(object):
 
     def pickle_greedyNET(self):
         utils.pickle_model(self, self.BASE_PATH_LOG_MODEL+'model.pickle')
+
+
+# class greedyProcess(object):
+#     '''
+#     It takes the structure of a network (in the form of a nolearn dictionary)
+#     and handle the greedy training, deciding in which order the layers
+#     should be trained.
+#     '''
+
+
+#     def __init__(self, nolearn_layers):
+#         '''
+#         The output layer should be the last one of the list.
+
+#         '''
+#         self.input_layers = nolearn_layers
+
+#         # Detect layers informations:
+#         self.layers_info = OrderedDict()
+#         for i, layer in enumerate(self.input_layers):
+#             if isinstance(layer[1], dict):
+#                 # Newer format: (Layer, {'layer': 'kwargs'})
+#                 layer_factory, layer_kw = layer
+#                 layer_kw = layer_kw.copy()
+#             else:
+#                 # The legacy format: ('name', Layer)
+#                 layer_name, layer_factory = layer
+#                 layer_kw = {'name': layer_name}
+
+#             if 'name' not in layer_kw:
+#                 layer_kw['name'] = self._layer_name(layer_factory, i)
+
+#             layer_dict = {}
+#             self.layers_info[name] = layer_dict
+#             # Used only in few situations: (see requirements)
+#             layer_dict['name'] = name
+
+#             # Check if can be trained greedily:
+#             layer_dict['trained_greedily'] = False
+#             if isinstance(layer_factory, (layers.Conv2DLayer, layers.TransposedConv2DLayer)):
+#                 layer_dict['trained_greedily'] = True
+
+#             # Check the immediate requirements of the layer:
+#             if isinstance(layer_factory, layers.InputLayer):
+#                 layer_dict['req'] = False
+#             else:
+#                 if 'incoming' in layer_kw:
+#                     layer_dict['req'] = [layer_kw['incoming']]
+#                 elif 'incomings' in layer_kw:
+#                     layer_dict['req'] = layer_kw['incomings']
+#                 else:
+#                     layer_dict['req'] = [self.layers_info[i-1]['name']]
+
+#         # Contruct all possible ways from output to input:
+#         ways_to_input = [[self.layers_info[-1]['name']]]
+#         ways_to_input = self._detect_way_to_input(ways_to_input)
+
+
+
+#     def _detect_way_to_input(self, ways_to_input, idx_way=0):
+#         current_way = ways_to_input[idx_way]
+#         layer = current_way[-1]
+#         while self.layers_info[layer]['req']:
+#             if len(self.layers_info[layer]['req'])==1:
+#                 # Just one requirements:
+#                 current_way.insert(0,self.layers_info[layer]['req'][0])
+#             else:
+#                 # More requirements, create other ways:
+#                 for i in range(len(self.layers_info[layer]['req'])-1):
+#                     ways_to_input.append(copy(ways_to_input[idx_way]))
+
+#                 for i, req_layer in enumerate(self.layers_info[layer]['req']):
+#                     ways_to_input[idx_way+i].insert(0, req_layer)
+#                     ways_to_input = self._detect_way_to_input(ways_to_input, idx_way+i)
+#                 break
+
+#             layer = current_way[-1]
+
+#         return ways_to_input
+
+
+
+#     def _layer_name(self, layer_class, index):
+#         '''
+#         Taken from nolearn library.
+#         '''
+#         return "{}{}".format(
+#             layer_class.__name__.lower().replace("layer", ""), index)
+
+
+
+
+# netLayers = [
+#     # layer dealing with the input data
+#     (layers.InputLayer, {
+#         'name': 'inputLayer',
+#         'shape': (None, None, None, None)}),
+#     (layers.Conv2DLayer, {
+#         'name': 'conv1',
+#         'num_filters': 5,
+#         'filter_size': 3,
+#         'nonlinearity': rectify}),
+#     (layers.Conv2DLayer, {
+#         'name': 'conv2',
+#         'num_filters': 2,
+#         'filter_size': 3,
+#         'pad':'same',
+#         'nonlinearity': identity}),
+#     # New node:
+#     (layers.Conv2DLayer, {
+#         'incoming': 'inputLayer',
+#         'name': 'conv1_newNode',
+#         'num_filters': 5,
+#         'filter_size': 3,
+#         'pad':'same',
+#         'nonlinearity': rectify}),
+#     (layers.Conv2DLayer, {
+#         'name': 'conv2_newNode',
+#         'num_filters': 2,
+#         'filter_size': 3,
+#         'pad':'same',
+#         'nonlinearity': identity}),
+#     (boosting_mergeLayer, {
+#         'incomings': ['conv2', 'conv2_newNode'],
+#         'merge_function': T.add,
+#         'name': 'boosting_merge'}),
+#     (layers.NonlinearityLayer,{
+#         'name': 'final_nonlinearity',
+#         'incoming': 'boosting_merge',
+#         'nonlinearity': segm_utils.softmax_segm}),
+# ]
+
+
 
 
 
