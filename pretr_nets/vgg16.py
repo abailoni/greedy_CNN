@@ -20,7 +20,7 @@ from lasagne.layers import set_all_param_values
 
 def import_model():
     print "Importing pretrained net..."
-    model = pickle.load(open('/mnt/localdata01/abailoni/pretrained/vgg16.pkl'))
+    model = pickle.load(open('/mnt/localdata1/abailoni/pretrained/vgg16.pkl'))
     return model
 
 

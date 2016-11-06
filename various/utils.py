@@ -2,6 +2,7 @@ import cPickle as pickle
 import numpy as np
 import os
 import shutil
+import os.path
 
 
 def pickle_model(net, filename):
@@ -23,12 +24,16 @@ def join_dict(dict1, dict2):
     return new_dict
 
 
+
 def float32(k):
     return np.cast['float32'](k)
 
 def create_dir(dir):
     if not os.path.exists(dir):
         os.makedirs(dir)
+
+def check_file(path_file):
+    return os.path.isfile(path_file)
 
 
 def copyDirectory(src, dest):
