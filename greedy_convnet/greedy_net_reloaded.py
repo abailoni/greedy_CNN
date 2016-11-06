@@ -1,8 +1,15 @@
+__author__ = "abailoni"
+
+'''
+New version of greedyNet, detecting automatically which layers to train and in
+which order, given the structure of a net.
+'''
+
 import time
 from copy import deepcopy, copy
 from collections import OrderedDict
 import numpy as np
-
+from warnings import warn
 
 import theano.tensor as T
 import lasagne.layers as layers
@@ -22,8 +29,9 @@ import various.utils as utils
 
 
 def restore_greedyModel(model_name, path_logs='./logs/'):
-    # After this, if the model is renamed, the method update_all_paths should be called
+    warn("This way to restore a model has been deprecated, please use the method load_pretrained_layers() instead and load the weights.")
     return utils.restore_model(path_logs+model_name+'/model.pickle')
+
 
 class greedyNet(object):
     '''
@@ -69,22 +77,21 @@ class greedyNet(object):
          - BASE_PATH_LOG
          - model_name
 
-        All options that hold in general for all layers, like:
+        All options that hold in general for all nolearn-nets, like:
             - batch_size
             - eval_size
             - num_classes
             - batchShuffle
             - ...
-
-        REMARK: for the moment it only supports the greedy training of conv2D
-        and transposed_conv layers (greedy training would be easy, but the boosting training of the filters should be changed for different kind of parameters...)
         '''
         self.input_layers = nolearn_layers
 
-        # Temp-network used only for computing spatial sizes and
+        # Temp-network used only for computing output spatial dim and
         # trained layers:
         self.whole_net = segmNeuralNet(layers=nolearn_layers)
         self.whole_net.initialize_layers()
+        # Compute output spatial dimensions:
+        self._compute_all_spatial_sizes()
 
         # -------------------------------
         # Detect layers informations:
@@ -92,6 +99,9 @@ class greedyNet(object):
         self.layers_info = OrderedDict()
         self.names = []
         for i, layer in enumerate(self.input_layers):
+            # ---------------------------------
+            # Detect or create name for layer:
+            # ---------------------------------
             if isinstance(layer[1], dict):
                 # Newer format: (Layer, {'layer': 'kwargs'})
                 layer_factory, layer_kw = layer
@@ -110,7 +120,9 @@ class greedyNet(object):
             layer_dict = {}
             self.layers_info[name] = layer_dict
 
+            # ---------------------------------
             # Check if it can be trained greedily:
+            # ---------------------------------
             layer_dict['trained_greedily'] = False
             layer_dict['trained'] = False
             if layer_factory==layers.Conv2DLayer:
@@ -120,9 +132,15 @@ class greedyNet(object):
                 layer_dict['trained_greedily'] = True
                 layer_dict['type'] = "trans_conv"
             else:
+                params = self.whole_net.layers_[name].get_params()
+                if len(params)!=0:
+                    raise NotImplemented("A greedy training of the layer %s is not implemented!")
                 layer_dict['type'] = None # other layer-type
 
-            # Check the immediate requirements of the layer:
+            # ---------------------------------
+            # Check the requirements of the layer
+            # (i.e. all the layers that are inputed to the layer):
+            # ---------------------------------
             if layer_factory==layers.InputLayer:
                 layer_dict['req'] = False
                 layer_dict['trained'] = True
@@ -141,7 +159,6 @@ class greedyNet(object):
         # Contruct all possible ways from input to output:
         # -------------------------------
         ways_to_output = [[self.names[-1]]]
-
 
         self.ways_to_output = self._detect_ways_to_input(ways_to_output)
         self.num_ways = len(self.ways_to_output)
@@ -183,7 +200,7 @@ class greedyNet(object):
                 # Just one requirements:
                 current_way.insert(0,self.layers_info[layer]['req'][0])
             else:
-                # More requirements, create other ways and go recursive:
+                # More requirements, create other ways and go for recursion:
                 idx_new_ways = [idx_way]
                 for i in range(len(self.layers_info[layer]['req'])-1):
                     ways_to_output.append(deepcopy(ways_to_output[idx_way]))
@@ -198,8 +215,10 @@ class greedyNet(object):
         return ways_to_output
 
 
-
     def _layer_name(self, layer_class, index):
+        '''
+        Helper method to create name (taken from nolearn)
+        '''
         return "{}{}".format(
             layer_class.__name__.lower().replace("layer", ""), index)
 
@@ -213,7 +232,7 @@ class greedyNet(object):
             **kwargs
         ):
         '''
-        MISSING DESCRIPTION
+        INSERT DESCRIPTION!
         '''
         if not kwargs_finetune:
             kwargs_finetune = {}
@@ -222,6 +241,8 @@ class greedyNet(object):
 
         # Get informations about next greedy step:
         fixed_input_layers, trained_layer = self._get_next_step()
+
+        assert trained_layer!=False, "All the network has been trained. No other greedy steps to perform."
 
         # Detect informations about the layer to be trained:
         boost_filters = kwargs.pop('boost_filters', 10)
@@ -310,7 +331,7 @@ class greedyNet(object):
 
         # All the network has been trained:
         if not layer_to_train:
-            print "ALL THE NETWORK HAS BEEN TRAINED!!"
+            print "All the network has been trained!"
             return self.input_layers, False
 
         # --------------------------------------------
@@ -328,11 +349,17 @@ class greedyNet(object):
     def _init_boosting(self, trained_layer, boost_filters):
         '''
         Compute how to boosting-train the filters in the selected trained_layer.
+        (i.e. how the perceptrons are defined and with how many filters)
 
-        Furthermore, it also detects all the spatial sizes
+        Inputs:
+            - trained_layer: name of the layer to train
+            - boost_filters: number of filters per perceptron
+
+        Returns an array a s.t.:
+            - a.shape[0] = number of perceptrons to train
+            - a[i] = num. of filters in perceptron i
         '''
-        # Check if spatial size has been saved:
-        print trained_layer
+        # Check if spatial size has been computed:
         if "output_shape" not in self.layers_info[trained_layer]:
             self._compute_all_spatial_sizes()
 
@@ -351,16 +378,17 @@ class greedyNet(object):
 
     def _compute_all_spatial_sizes(self):
         '''
-        Compile the input network and save the output shapes of all layers.
+        Save the output shapes of all layers.
         '''
         for layer_name in self.whole_net.layers_:
             self.layers_info[layer_name]["output_shape"] = get_output_shape(self.whole_net.layers_[layer_name])
 
-        print "Ciao!!"
-        from nolearn.lasagne.visualize import draw_to_file
-        draw_to_file(self.whole_net,"prova_UNet.pdf")
 
     def init_greedyLayer(self, trained_layer, fixed_input_layers, list_boost_filters, kwargs_finetune):
+        '''
+        Initialize the network that will finetune the pre-trained perceptrons
+        of the given trained_layer.
+        '''
         # If not preLoaded, initialize new network:
         if trained_layer not in self.subNets:
             logs_path = self.BASE_PATH_LOG_MODEL+trained_layer+'/'
@@ -391,6 +419,9 @@ class greedyNet(object):
             )
             return 0
         else:
+            raise NotImplemented("Loading greedy layer from weights not implemented yet")
+            # Stuff to do:
+            #
             # - Return pre-trained percetrons
             # - init and load all perceptrons weights in greedyLayer (not really feasible with the current implementation that saves only the last learned perc.)
             # - init and load the full pretrained greedyLayer
@@ -399,7 +430,13 @@ class greedyNet(object):
 
 
     def init_boostedPerceptron(self, trained_layer, fixed_input_layers, filters_in_perceptron, kwargs_boostedPerceptron, num_perceptron=False):
-        # If not preLoaded, initialize new node:
+        '''
+        Initialize the network that will train one perceptron.
+
+        Remark: at the moment only the last trained perceptron is kept in memory, not all of them.
+        '''
+
+
         perceptron_name = "perceptron_"+trained_layer
 
         params = deepcopy(kwargs_boostedPerceptron)
@@ -450,7 +487,7 @@ class greedyNet(object):
         Collect and pickle weights of the greedy layer (including
             the last additional classification layer)
 
-        PROBLEM: no distinction before/after finetuning....
+        PROBLEM to solve: no distinction before/after finetuning....
         '''
         # Collect weights:
         weights = self.subNets[trained_layer].get_greedy_weights()
@@ -464,12 +501,9 @@ class greedyNet(object):
         '''
         Load the weights of some previously pretrained layers.
         Set all of them as already trained.
-
-        IT PROBABLY NEEDS A DIFFERENT MODEL AS INPUT...
         '''
         model = pretrained_greedy_net if pretrained_greedy_net else self
 
-        # Check existence file:
         filename = model.BASE_PATH_LOG_MODEL+"weights_trainedLayers.pkl"
         if utils.check_file(filename):
             # if self.verbose:
@@ -487,7 +521,7 @@ class greedyNet(object):
 
     def _insert_new_layer(self, trained_layer):
         '''
-        It labels the trained layer as trained, saves learned weights,
+        It labels trained_layer as trained, saves learned weights,
         updates the main-weights-dictionary and pickles it.
         '''
 
@@ -517,7 +551,7 @@ class greedyNet(object):
         current_way = self.ways_to_output[way_num]
         info = self.layers_info
 
-        # Check labels 'trained':
+        # Check consistency labels 'trained':
         for i, layer_name in enumerate(current_way):
             if not info[layer_name]['trained']:
                 # If not-trained and trained greedily, stop:
@@ -533,12 +567,17 @@ class greedyNet(object):
                         break
                 info[layer_name]['trained'] = trained
 
-                # If not trained, all the following layers can't be 'trained':
+                # If not trained, all the following layers won't be 'trained':
                 if not trained:
                     break
 
 
     '''
+
+    ####################################
+    ## OBSOLETE: need to be updated with the new pickling method
+    ####################################
+
     #------------------------
     # UTILS METHODS:
     #------------------------
@@ -563,6 +602,9 @@ class greedyNet(object):
           - update main paths (and copy folders)
           - update all paths of all subNets
         '''
+        warn("This mehtod is obsolete and needs to be updated")
+
+
         old_path_model = self.BASE_PATH_LOG_MODEL
         if new_path:
             self.BASE_PATH_LOG = new_path
@@ -599,6 +641,7 @@ class greedyNet(object):
             - copy folders/logs in main model (and delete previous versions)
             - update all paths of subNets
         '''
+        warn("This mehtod is obsolete and needs to be updated.")
         self.preLoad = preLoad
         for net_name in preLoad:
             load = preLoad[net_name]

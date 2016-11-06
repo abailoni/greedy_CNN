@@ -1,3 +1,9 @@
+__author__ = "abailoni"
+
+'''
+Old version of greedyNet
+'''
+
 import time
 from copy import deepcopy, copy
 from collections import OrderedDict

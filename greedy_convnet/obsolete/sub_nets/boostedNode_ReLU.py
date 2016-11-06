@@ -1,4 +1,7 @@
+__author__ = "abailoni"
+
 '''
+OBSOLETE:
 Modified version of boostedNode.py using directly a ReLU non-linearity instead
 of going from sigmoid to ReLU
 '''

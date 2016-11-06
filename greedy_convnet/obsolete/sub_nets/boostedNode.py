@@ -1,3 +1,10 @@
+__author__ = "abailoni"
+
+'''
+OBSOLETE
+'''
+
+
 import numpy as np
 from copy import deepcopy
 import json

@@ -1,3 +1,8 @@
+__author__ = "abailoni"
+
+'''
+Network that will train one perceptron
+'''
 import numpy as np
 from copy import deepcopy
 # import json

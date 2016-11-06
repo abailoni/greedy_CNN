@@ -1,3 +1,9 @@
+__author__ = "abailoni"
+
+'''
+Primordial and obsolete version of full_trained net
+'''
+
 from copy import deepcopy
 import json
 
