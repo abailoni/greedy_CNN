@@ -32,7 +32,6 @@ class BatchIterator_Greedy(BatchIterator):
         if yb is not None:
             GT_spatial_outputShape = yb.shape[-2:]
             if GT_spatial_outputShape!=self.layer_output_shape:
-                print "Resizing..."
                 temp = bin_ndarray(yb, (yb.shape[0], self.layer_output_shape[0], self.layer_output_shape[1]), operation='avg')
                 # Round to 0 or 1:
                 yb = np.around(temp).astype(np.int32)

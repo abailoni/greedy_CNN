@@ -90,13 +90,16 @@ class greedyNet(object):
         # trained layers:
         self.whole_net = segmNeuralNet(layers=nolearn_layers)
         self.whole_net.initialize_layers()
+
         # Compute output spatial dimensions:
+        self.layers_info = OrderedDict()
+        for layer_name in self.whole_net.layers_:
+            self.layers_info[layer_name] = {}
         self._compute_all_spatial_sizes()
 
         # -------------------------------
         # Detect layers informations:
         # -------------------------------
-        self.layers_info = OrderedDict()
         self.names = []
         for i, layer in enumerate(self.input_layers):
             # ---------------------------------
@@ -151,8 +154,6 @@ class greedyNet(object):
                     layer_dict['req'] = layer_kw['incomings']
                 else:
                     layer_dict['req'] = [self.names[i-1]]
-
-        print self.names
 
 
         # -------------------------------
@@ -231,9 +232,7 @@ class greedyNet(object):
             kwargs_finetune=None,
             **kwargs
         ):
-        '''
-        INSERT DESCRIPTION!
-        '''
+
         if not kwargs_finetune:
             kwargs_finetune = {}
         if not kwargs_perceptron:
@@ -403,9 +402,7 @@ class greedyNet(object):
             params['logs_path'] = logs_path
 
             idx_layer = self.names.index(trained_layer)
-            print "kwargs"
             layer_kargs = self.input_layers[idx_layer][1]
-            print layer_kargs
 
             self.subNets[trained_layer] = self.greedy_layer_class(
                 fixed_input_layers,
@@ -494,7 +491,8 @@ class greedyNet(object):
 
         # Pickle weights:
         active_perceptrons = self.subNets[trained_layer].active_perceptrons
-        utils.pickle_model(weights, self.BASE_PATH_LOG_MODEL+"greedyWeights_%s_perceptr_%d.pkl" %(trained_layer, active_perceptrons) )
+        utils.create_dir(self.BASE_PATH_LOG_MODEL+"greedy_weights/%s/" %(trained_layer) )
+        utils.pickle_model(weights, self.BASE_PATH_LOG_MODEL+"greedy_weights/%s/finetuning_%d_perceptr.pkl" %(trained_layer, active_perceptrons) )
 
 
     def load_pretrained_layers(self, pretrained_greedy_net=None):
@@ -516,6 +514,8 @@ class greedyNet(object):
 
             # Set the not-greedily-trained as trained:
             self._check_trained_layers()
+        else:
+            print "No pretrained layers found"
 
 
 

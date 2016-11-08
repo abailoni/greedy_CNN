@@ -27,7 +27,9 @@ class boostedPerceptron(object):
             greedyLayer,
             fixed_weights,
             **greedy_kwargs):
+
         # info = deepcopy(greedy_kwargs)
+
         # --------------------------
         # Inherited by greedyLayer:
         # --------------------------
@@ -110,7 +112,7 @@ class boostedPerceptron(object):
 
         self.net._output_layer = self.net.initialize_layers()
 
-        # Set all fixed layers as not trainable & reg:
+        # Set all fixed layers as not trainable & regularizable:
         fixed_layers_names = [layer[1]['name'] for layer in fixed_input_layers]
         for name in fixed_layers_names:
             if layers_info[name]['type']=='conv' or layers_info[name]['type']=='trans_conv':
@@ -129,7 +131,7 @@ class boostedPerceptron(object):
 
 
         # # -------------------------------------
-        # # SAVE INFO NET:
+        # # SAVE INFO NET: (for log)
         # # -------------------------------------
         # info['filter_size1'] = self.filter_size1
         # info['filter_size2'] = self.filter_size2
@@ -155,9 +157,8 @@ class boostedPerceptron(object):
 
         fixed_weights
             type: dictionary
-            value: key->layer_name; content -> list of layer_paramsValues
+            value: key->layer_name; content -> list with paramsValues
         '''
-        print [key for key in self.net.layers_]
         for layer in self.net.layers_:
             if layer not in ["greedyConv_1", "greedyConv_2", "mask"]:
                 params_fixed_layer = self.net.layers_[layer].get_params()
@@ -213,9 +214,6 @@ class categorical_crossentropy_segm_boost(object):
         self.boosting_weights = theano.shared(np.ones((self.shape,),dtype=np.float32))
 
     def update_boosting_weights(self,prob_residuals):
-        # if not self.boosting_weights:
-        #     self.boosting_weights = theano.shared(prob_residuals)
-        # else:
         self.boosting_weights.set_value(prob_residuals)
 
     def __call__(self, prediction_proba, targets):

@@ -94,9 +94,9 @@ class modTrainSplit(object):
                 X_valid, y_valid = _sldict(X, valid_indices), y[valid_indices]
             elif self.mode=='proportion':
                 N = X.shape[0]
-                train_slice = slice(round(N*(1-self.eval_size)))
-                valid_slice = slice(round(N*(1-self.eval_size)), None)
-                print train_slice, valid_slice
+                train_slice = slice(int(round(N*(1-self.eval_size))))
+                valid_slice = slice(int(round(N*(1-self.eval_size))), None)
+
                 X_train, y_train = _sldict(X, train_slice), y[train_slice]
                 X_valid, y_valid = _sldict(X, valid_slice), y[valid_slice]
             else:
@@ -112,8 +112,7 @@ class modTrainSplit(object):
         if len(X_valid.shape)==3:
             X_valid = X_valid.expand_dims(axis=0)
             y_valid = y_valid.expand_dims(axis=0)
-        print X_train.shape
-        print X_valid.shape
+
         return X_train, X_valid, y_train, y_valid
 
 

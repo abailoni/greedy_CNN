@@ -209,7 +209,7 @@ class greedyLayer_reload(object):
 
 
         # -------------------------------------
-        # SAVE INFO NET:
+        # SAVE INFO NET: (for log)
         # -------------------------------------
         # info['num_classes'] = self.num_classes
         # info.pop('update', None)
