@@ -122,7 +122,7 @@ class greedyLayer_reload(object):
         # Adjust the layer parameters:
         # ---------------------------------------------------
         self.layer_kwargs = deepcopy(layer_kwargs)
-        layer_kwargs['name'] = 'greedyConv_1'
+        self.layer_kwargs['name'] = 'greedyConv_1'
 
 
 
@@ -136,7 +136,7 @@ class greedyLayer_reload(object):
             # Here it should be modified to take all the parameters from
             #
             netLayers += [
-                (layers.Conv2DLayer, layer_kwargs),
+                (layers.Conv2DLayer, self.layer_kwargs),
                 (MaskLayer,{
                     'name': 'mask',
                     'list_boost_filters': list_boost_filters,
@@ -151,9 +151,9 @@ class greedyLayer_reload(object):
                     'nonlinearity': segm_utils.softmax_segm})]
 
         elif self.layer_type=="trans_conv":
-            layer_kwargs.setdefault('crop', 0)
+            self.layer_kwargs.setdefault('crop', 0)
             netLayers += [
-                (layers.TrasposedConv2DLayer, layer_kwargs),
+                (layers.TrasposedConv2DLayer, self.layer_kwargs),
                 (MaskLayer,{
                     'name': 'mask',
                     'list_boost_filters': list_boost_filters,
@@ -163,7 +163,7 @@ class greedyLayer_reload(object):
                     'name': 'greedyConv_2',
                     'num_filters': self.num_classes,
                     'filter_size': self.filter_size,
-                    'crop': layer_kwargs['crop'],
+                    'crop': self.layer_kwargs['crop'],
                     'W': Normal(std=self.init_weight),
                     'nonlinearity': segm_utils.softmax_segm})]
 

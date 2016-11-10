@@ -120,40 +120,40 @@ class greedyNet(object):
 
             name = layer_kw['name']
             self.names.append(name)
-            layer_dict = {}
-            self.layers_info[name] = layer_dict
+            layer_info = {}
+            self.layers_info[name] = layer_info
 
             # ---------------------------------
             # Check if it can be trained greedily:
             # ---------------------------------
-            layer_dict['trained_greedily'] = False
-            layer_dict['trained'] = False
+            layer_info['trained_greedily'] = False
+            layer_info['trained'] = False
             if layer_factory==layers.Conv2DLayer:
-                layer_dict['trained_greedily'] = True
-                layer_dict['type'] = "conv"
+                layer_info['trained_greedily'] = True
+                layer_info['type'] = "conv"
             elif layer_factory==layers.TransposedConv2DLayer:
-                layer_dict['trained_greedily'] = True
-                layer_dict['type'] = "trans_conv"
+                layer_info['trained_greedily'] = True
+                layer_info['type'] = "trans_conv"
             else:
                 params = self.whole_net.layers_[name].get_params()
                 if len(params)!=0:
                     raise NotImplemented("A greedy training of the layer %s is not implemented!")
-                layer_dict['type'] = None # other layer-type
+                layer_info['type'] = None # other layer-type
 
             # ---------------------------------
             # Check the requirements of the layer
             # (i.e. all the layers that are inputed to the layer):
             # ---------------------------------
             if layer_factory==layers.InputLayer:
-                layer_dict['req'] = False
-                layer_dict['trained'] = True
+                layer_info['req'] = False
+                layer_info['trained'] = True
             else:
                 if 'incoming' in layer_kw:
-                    layer_dict['req'] = [layer_kw['incoming']]
+                    layer_info['req'] = [layer_kw['incoming']]
                 elif 'incomings' in layer_kw:
-                    layer_dict['req'] = layer_kw['incomings']
+                    layer_info['req'] = layer_kw['incomings']
                 else:
-                    layer_dict['req'] = [self.names[i-1]]
+                    layer_info['req'] = [self.names[i-1]]
 
 
         # -------------------------------
@@ -256,7 +256,7 @@ class greedyNet(object):
         print "Num. pretrained perceptrons: %d" %num_pretrained_perc
 
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
-        # Training of the first node:
+        # Training of the first perceptron:
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
         if num_pretrained_perc==0:
             # Compile first node:
@@ -274,7 +274,7 @@ class greedyNet(object):
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
         for num_filters in list_boost_filters[num_pretrained_perc+1:]:
 
-            # Compile new boostedNode:
+            # Compile new boostedPerpectron:
             self.init_boostedPerceptron(trained_layer, fixed_input_layers, num_filters, kwargs_perceptron)
 
             # Train and insert weights:
@@ -388,6 +388,7 @@ class greedyNet(object):
         Initialize the network that will finetune the pre-trained perceptrons
         of the given trained_layer.
         '''
+        print trained_layer, fixed_input_layers, list_boost_filters
         # If not preLoaded, initialize new network:
         if trained_layer not in self.subNets:
             logs_path = self.BASE_PATH_LOG_MODEL+trained_layer+'/'
