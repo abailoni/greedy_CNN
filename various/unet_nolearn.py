@@ -1,4 +1,7 @@
-__author__ = 'Guido Zuidhof'
+# Modified version of lasagne net by Guido Zuidhof
+__author__ = 'abailoni'
+
+
 import numpy as np
 from collections import OrderedDict
 

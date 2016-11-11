@@ -97,8 +97,7 @@ class greedyNet(object):
                     {
                         'name_trained_layer': istance of greedyLayer_reload(),
                         ...
-                        'perceptron_name_trained_layer': istance of
-                            boostedPerceptron(),
+                        'perceptron_name_trained_layer': istance of boostedPerceptron(),
                         ...
                     }
 
@@ -312,11 +311,15 @@ class greedyNet(object):
         # -----------
             - fit_perceptrons:
                 TYPE: callable
-                VALUE: function with arguments (net, num_perceptron). It will receive as arguments the perceptron net stored in self.subNets["perceptron_"+trained_layer_name].net and the number of the trained perceptron. It returns the inputed net trained, e.g. by calling the nolearn method net.fit().
+                VALUE: function with arguments (net, num_perceptron).
+                    It will receive as arguments the perceptron net stored in self.subNets["perceptron_"+trained_layer_name].net and the number of the trained perceptron.
+                    It returns the inputed net trained, e.g. by calling the nolearn method net.fit().
 
             - finetune:
                 TYPE: callable
-                VALUE: function with arguments (net, num_perceptron). It will receive as arguments the greedy net stored in self.subNets[trained_layer_name].net and the number of perceptrons inserted in the net. It returns the inputed net finetuned, e.g. by calling the nolearn method net.fit().
+                VALUE: function with arguments (net, num_perceptron).
+                    It will receive as arguments the greedy net stored in self.subNets[trained_layer_name].net and the number of perceptrons inserted in the net.
+                    It returns the inputed net finetuned, e.g. by calling the nolearn method net.fit().
 
             - kwargs_perceptron:
                 TYPE: dictionary
