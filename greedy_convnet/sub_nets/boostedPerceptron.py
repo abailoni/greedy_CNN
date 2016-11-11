@@ -19,6 +19,20 @@ from greedy_convnet import BatchIterator_Greedy
 import various.utils as utils
 
 class boostedPerceptron(object):
+    '''
+    # ---------------------------------------------
+    # STRUCTURE OF THE CLASS: (main attributes)
+    # ---------------------------------------------
+
+        - net:
+            TYPE: istance of NeuralNet() in mod_nolearn
+            VALUE: attribute containing the actual perceptron network that will be trained
+
+        It inherits most of the attributes from the greedyLayer passed during
+        initializition.
+
+    '''
+
     def __init__(self,
             fixed_input_layers,
             layers_info,
@@ -27,6 +41,37 @@ class boostedPerceptron(object):
             greedyLayer,
             fixed_weights,
             **greedy_kwargs):
+
+        '''
+        # ----------
+        # INPUTS:
+        # ----------
+
+            - fixed_input_layers:
+                TYPE: dictionary
+                VALUE: nolearn-dictionary with previous layers that won't be trained
+
+            - fixed_weights:
+                TYPE: dictionary
+                VALUES: weights for the fixed layers (check attribute trained_weights in class greedyNet)
+
+            - layers_info:
+                TYPE: dictionary
+                VALUE: infos about all layers (e.g. output_shape, req, trained_greedily, trained, type...)
+
+            - name_trained_layer
+                TYPE: string
+                VALUE: name of the trained layer (mainly for log and to check infos)
+
+            - filters_in_perceptron:
+                TYPE: int
+                VALUES: number of filters in perceptron
+
+            - greedyLayer:
+                TYPE: instance of greedyLayer_reload()
+                VALUE: instance representing the full greedy trained layer
+        '''
+
 
         # info = deepcopy(greedy_kwargs)
 

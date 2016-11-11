@@ -35,6 +35,10 @@ def restore_greedyModel(model_name, path_logs='./logs/'):
 
 class greedyNet(object):
     '''
+    # ----------
+    # MAIN IDEA:
+    # ----------
+
     Example of network:
 
             Input
@@ -59,6 +63,45 @@ class greedyNet(object):
     trained.
     Going then to the next way, 'conv2' is trained. Finally we can also
     train 'conv3'. The output layer is reached, thus the process is stopped.
+
+
+    # ---------------------------------------------
+    # STRUCTURE OF THE CLASS: (main attributes)
+    # ---------------------------------------------
+
+        - self.input_layers
+            TYPE: dictionary (nolearn style)
+            VALUE: passed nolearn dictionary with full-net structure
+
+        - self.info_layers
+            TYPE: dictionary of dictionaries
+            VALUES: it contains information about layers  (trainable, greedy_trainable, name, req, etc...)
+                Structure:
+                    {'name_layer': {'trained': True, 'req': ...}, ...}
+
+        - self.whole_net:
+            TYPE: istance of NeuralNet() in mod_nolearn
+            VALUE: passed network, but used only for finding spatial dimensions of the layers (never trained)
+
+        - self.trained_weights:
+            TYPE: dictionary
+            VALUE: dictionary containing the learned weights of the trained layers.
+                Structure:
+                    {'name_trained_layer': [list_of_lasagne_params_values], ...}
+
+        - self.subNets:
+            TYPE: dictionary containing istances of the classes greedyLayer_reload() and boostedPerceptron()
+            VALUE: dictionary containing the trained greedy networks and the networks used for training the perceptrons.
+
+                Structure:
+                    {
+                        'name_trained_layer': istance of greedyLayer_reload(),
+                        ...
+                        'perceptron_name_trained_layer': istance of
+                            boostedPerceptron(),
+                        ...
+                    }
+
     '''
 
     def __init__(self, nolearn_layers, **FULLNET_kwargs):
@@ -72,17 +115,29 @@ class greedyNet(object):
 
         The output layer should be the last one of the passed list.
 
-        Options and parameters:
+        # ----------
+        # INPUTS:
+        # ----------
 
-         - BASE_PATH_LOG
-         - model_name
+            - nolearn_layers:
+                TYPE: dictionary
+                VALUES: nolearn-style dictionary with all layers of the trained network
 
-        All options that hold in general for all nolearn-nets, like:
-            - batch_size
-            - eval_size
-            - num_classes
-            - batchShuffle
-            - ...
+            - FULLNET_kwargs:
+                TYPE: additional parameters
+                VALUES:
+                    Accepted options:
+
+                     - BASE_PATH_LOG:
+                        TYPE: string
+                        VALUE: path to main log folder
+
+                     - model_name:
+                        TYPE: string
+                        VALUE: model name (the logs will be saved in BASE_PATH_LOG/model_name)
+
+                    - additional arguments passed to the initialization of greedyLayer_reload() and boostedPerceptron() instances
+                        (e.g. batch_size, eval_size, num_classes, batchShuffle...)
         '''
         self.input_layers = nolearn_layers
 
@@ -232,6 +287,54 @@ class greedyNet(object):
             kwargs_finetune=None,
             **kwargs
         ):
+        '''
+        # ----------
+        # MAIN IDEA:
+        # ----------
+        Each time a new layer is trained greedily:
+
+            - decide which layer to train and which pre-trained layers are needed (fixed_input_layers)
+            - initialize greedyLayer network, stored in self.subNets[trained_layer_name]
+            - check if some perceptrons have been already trained and load them
+                from file [not implemented yet]
+            - train first perceptron [if not pretrained]
+            - for following perceptrons:
+                - initialize net for training new perceptron, stored in
+                    self.subNets["perceptron_"+trained_layer_name]
+                - train perceptron subNet
+                - insert weights into main net self.subNets[trained_layer_name]
+                - finetune self.subNets[trained_layer_name]
+            - insert learned weights into self.trained_weights
+
+
+        # -----------
+        # INPUTS:
+        # -----------
+            - fit_perceptrons:
+                TYPE: callable
+                VALUE: function with arguments (net, num_perceptron). It will receive as arguments the perceptron net stored in self.subNets["perceptron_"+trained_layer_name].net and the number of the trained perceptron. It returns the inputed net trained, e.g. by calling the nolearn method net.fit().
+
+            - finetune:
+                TYPE: callable
+                VALUE: function with arguments (net, num_perceptron). It will receive as arguments the greedy net stored in self.subNets[trained_layer_name].net and the number of perceptrons inserted in the net. It returns the inputed net finetuned, e.g. by calling the nolearn method net.fit().
+
+            - kwargs_perceptron:
+                TYPE: dictionary
+                VALUES: arguments passed to the initialization method of the boostedPerceptron() instance stored in self.subNets["perceptron_"+trained_layer_name] (e.g. learning rate, type of update, etc)
+
+            - kwargs_finetune:
+                TYPE: dictionary
+                VALUES: arguments passed to the initialization method of the greedyLayer_reload() instance stored in self.subNets[trained_layer_name] (e.g. learning rate, type of update, etc)
+
+            - kwargs:
+                TYPE: addictional argmuments
+                VALUES: it accepts the following additional values:
+
+                    - 'boost_filters':
+                        TYPE: int (default: 10)
+                        VALUE: how many filters to put in a perceptron
+
+        '''
 
         if not kwargs_finetune:
             kwargs_finetune = {}
@@ -350,11 +453,18 @@ class greedyNet(object):
         Compute how to boosting-train the filters in the selected trained_layer.
         (i.e. how the perceptrons are defined and with how many filters)
 
-        Inputs:
-            - trained_layer: name of the layer to train
-            - boost_filters: number of filters per perceptron
+        # ----------
+        # INPUTS:
+        # ----------
+            - trained_layer
+                TYPE: string
+                VALUE: name of the trained layer
 
-        Returns an array a s.t.:
+            - boost_filters:
+                TYPE: list
+                VALUES: number of filters for each perceptron (e.g. [5,5,5,5,5,3])
+
+        Returns an array s.t.:
             - a.shape[0] = number of perceptrons to train
             - a[i] = num. of filters in perceptron i
         '''
@@ -387,8 +497,31 @@ class greedyNet(object):
         '''
         Initialize the network that will finetune the pre-trained perceptrons
         of the given trained_layer.
+
+        # ----------
+        # INPUTS:
+        # ----------
+            - trained_layer
+                TYPE: string
+                VALUE: name of the trained layer
+
+            - fixed_input_layers:
+                TYPE: dictionary
+                VALUE: nolearn-dictionary with previous layers that won't be trained
+
+            - list_boost_filters:
+                TYPE: list
+                VALUES: number of filters for each perceptron (e.g. [5,5,5,5,5,3])
+
+            - kwargs_finetune:
+                TYPE: dictionary
+                VALUES: arguments passed to the initialization method of the greedyLayer_reload() instance stored in self.subNets[trained_layer_name] (e.g. learning rate, type of update, etc)
+
+        # OUTPUT:
+            - number_pretrained_perceptrons (loaded from file)
+                TYPE: int
+
         '''
-        print trained_layer, fixed_input_layers, list_boost_filters
         # If not preLoaded, initialize new network:
         if trained_layer not in self.subNets:
             logs_path = self.BASE_PATH_LOG_MODEL+trained_layer+'/'
@@ -420,7 +553,7 @@ class greedyNet(object):
             raise NotImplemented("Loading greedy layer from weights not implemented yet")
             # Stuff to do:
             #
-            # - Return pre-trained percetrons
+            # - Return number of pre-trained percetrons
             # - init and load all perceptrons weights in greedyLayer (not really feasible with the current implementation that saves only the last learned perc.)
             # - init and load the full pretrained greedyLayer
             # - (update active_perceptrons)
@@ -432,6 +565,29 @@ class greedyNet(object):
         Initialize the network that will train one perceptron.
 
         Remark: at the moment only the last trained perceptron is kept in memory, not all of them.
+
+        # ----------
+        # INPUTS:
+        # ----------
+            - trained_layer
+                TYPE: string
+                VALUE: name of the trained layer
+
+            - fixed_input_layers:
+                TYPE: dictionary
+                VALUE: nolearn-dictionary with previous layers that won't be trained
+
+            - filters_in_perceptron:
+                TYPE: int
+                VALUES: how many filters in the perceptron
+
+            - kwargs_perceptron:
+                TYPE: dictionary
+                VALUES: arguments passed to the initialization method of the boostedPerceptron() instance stored in self.subNets["perceptron_"+trained_layer_name] (e.g. learning rate, type of update, etc)
+
+            - num_perceptron:
+                TYPE: int
+                VALUES: not used at the moment. Possible use: store all the trained perceptrons in separate nets, instead to rewrite always the same one in subNets["perceptron_"+trained_layer]
         '''
 
 
@@ -461,6 +617,19 @@ class greedyNet(object):
 
 
     def train_boostedPerceptron(self, trained_layer, fit_routine):
+        '''
+        # ----------
+        # INPUTS:
+        # ----------
+            - trained_layer
+                TYPE: string
+                VALUE: name of the trained layer
+
+            - fit_routine:
+                TYPE: callable
+                VALUE: function with arguments (net, num_perceptron). It will receive as arguments the perceptron net stored in self.subNets["perceptron_"+trained_layer_name].net and the number of the trained perceptron. It returns the inputed net trained, e.g. by calling the nolearn method net.fit().
+
+        '''
         # Train perceptron:
         num_perceptron  = self.subNets[trained_layer].active_perceptrons
         perceptron_name = "perceptron_"+trained_layer
@@ -472,6 +641,20 @@ class greedyNet(object):
 
 
     def finetune_greedyLayer(self, trained_layer, finetune_routine):
+        '''
+        # ----------
+        # INPUTS:
+        # ----------
+            - trained_layer
+                TYPE: string
+                VALUE: name of the trained layer
+
+            - finetune_routine:
+                TYPE: callable
+                VALUE: function with arguments (net, num_perceptron). It will receive as arguments the greedy net stored in self.subNets[trained_layer_name].net and the number of perceptrons inserted in the net. It returns the inputed net finetuned, e.g. by calling the nolearn method net.fit().
+
+        '''
+
         # Finetune:
         num_perceptron  = self.subNets[trained_layer].active_perceptrons
         print "\n\n--------------------------------------------------------"
@@ -573,238 +756,108 @@ class greedyNet(object):
                     break
 
 
-    '''
+####################################
+## OBSOLETE: need to be updated with the new pickling method
+####################################
 
-    ####################################
-    ## OBSOLETE: need to be updated with the new pickling method
-    ####################################
+# '''
 
-    #------------------------
-    # UTILS METHODS:
-    #------------------------
-    To import previously pretrained full or partial Greedy models:
+#     #------------------------
+#     # UTILS METHODS:
+#     #------------------------
+#     To import previously pretrained full or partial Greedy models:
 
-      - create a new GreedyNET or import existing one using
-        restore_greedyModel()
+#       - create a new GreedyNET or import existing one using
+#         restore_greedyModel()
 
-      - in order not to overwrite the old model, call update_all_paths()
-        to update the name (and change the logs path)
+#       - in order not to overwrite the old model, call update_all_paths()
+#         to update the name (and change the logs path)
 
-      - if subNets should be loaded, call load_subNets()
-    '''
+#       - if subNets should be loaded, call load_subNets()
+# '''
 
-    def update_all_paths(self, newname_model, new_path=None):
-        '''
-        After restoring a greedy model or importing pre-trained subNets, this
-        method should be called to avoid inconsistencies in logs and saved data.
-
-        In order what it does:
-          - update name main model
-          - update main paths (and copy folders)
-          - update all paths of all subNets
-        '''
-        warn("This mehtod is obsolete and needs to be updated")
-
-
-        old_path_model = self.BASE_PATH_LOG_MODEL
-        if new_path:
-            self.BASE_PATH_LOG = new_path
-        self.model_name = newname_model
-        self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
-
-        # Copy directories and logs:
-        import mod_nolearn.utils as utils
-        utils.copyDirectory(old_path_model, self.BASE_PATH_LOG_MODEL)
-
-        # Update paths:
-        self.net.update_logs_path(self.BASE_PATH_LOG_MODEL)
-        self._update_subNets_paths()
-
-
-    def load_subNets(self, preLoad):
-        '''
-        Input:
-            - preLoad: a dictionary such that:
-                - the keys are the names of the nodes (e.g. 'cnv_L0_G0')
-                - each element contains a tuple such that:
-                     (path_to_pretr_model, train_flag, nodes_trained)
-                     ('logs/model_A/', True, nodes_trained)
-
-        The third options indicates the pretrained nodes only in the case of a greedyLayer.
-
-        In particular we have:
-                train = True if active_nodes>load[2] else False
-        where the active_nodes are the one in the MAIN part of the net, w/o considering the new node.
-        Conclusion: just put how many nodes have been aleardy trained in the MAIN part of the net (given by convSoft.active_nodes)
-
-        What it does in order:
-            - import subNets
-            - copy folders/logs in main model (and delete previous versions)
-            - update all paths of subNets
-        '''
-        warn("This mehtod is obsolete and needs to be updated.")
-        self.preLoad = preLoad
-        for net_name in preLoad:
-            load = preLoad[net_name]
-            if load[0]:
-                # Imported from other pretrained model:
-                subNet_old_path = load[0]+net_name+'/'
-                subNet_new_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
-                if 'reg' in net_name:
-                    self.regr[net_name] = utils.restore_model(subNet_old_path+'routine.pickle')
-                elif 'cnv' in net_name:
-                    self.convSoftmax[net_name] = utils.restore_model(subNet_old_path+'routine.pickle')
-                else:
-                    raise ValueError("Not recognized netname")
-                # Delete possible previous folders:
-                utils.deleteDirectory(subNet_new_path[:-1])
-                # Copy old subNet:
-                # utils.create_dir(subNet_new_path)
-                utils.copyDirectory(subNet_old_path, subNet_new_path)
-
-        self._update_subNets_paths()
-
-
-    def _update_subNets_paths(self):
-        for net_name in self.regr:
-            self.regr[net_name].net.update_logs_path(self.BASE_PATH_LOG_MODEL+net_name+'/')
-        for net_name in self.convSoftmax:
-            self.convSoftmax[net_name].net.update_logs_path(self.BASE_PATH_LOG_MODEL+net_name+'/')
-
-
-    def pickle_greedyNET(self):
-        utils.pickle_model(self, self.BASE_PATH_LOG_MODEL+'model.pickle')
-
-
-# class greedyProcess(object):
-#     '''
-#     It takes the structure of a network (in the form of a nolearn dictionary)
-#     and handle the greedy training, deciding in which order the layers
-#     should be trained.
-#     '''
-
-
-#     def __init__(self, nolearn_layers):
+#     def update_all_paths(self, newname_model, new_path=None):
 #         '''
-#         The output layer should be the last one of the list.
+#         After restoring a greedy model or importing pre-trained subNets, this
+#         method should be called to avoid inconsistencies in logs and saved data.
 
+#         In order what it does:
+#           - update name main model
+#           - update main paths (and copy folders)
+#           - update all paths of all subNets
 #         '''
-#         self.input_layers = nolearn_layers
+#         warn("This mehtod is obsolete and needs to be updated")
 
-#         # Detect layers informations:
-#         self.layers_info = OrderedDict()
-#         for i, layer in enumerate(self.input_layers):
-#             if isinstance(layer[1], dict):
-#                 # Newer format: (Layer, {'layer': 'kwargs'})
-#                 layer_factory, layer_kw = layer
-#                 layer_kw = layer_kw.copy()
-#             else:
-#                 # The legacy format: ('name', Layer)
-#                 layer_name, layer_factory = layer
-#                 layer_kw = {'name': layer_name}
 
-#             if 'name' not in layer_kw:
-#                 layer_kw['name'] = self._layer_name(layer_factory, i)
+#         old_path_model = self.BASE_PATH_LOG_MODEL
+#         if new_path:
+#             self.BASE_PATH_LOG = new_path
+#         self.model_name = newname_model
+#         self.BASE_PATH_LOG_MODEL = self.BASE_PATH_LOG+self.model_name+'/'
 
-#             layer_dict = {}
-#             self.layers_info[name] = layer_dict
-#             # Used only in few situations: (see requirements)
-#             layer_dict['name'] = name
+#         # Copy directories and logs:
+#         import mod_nolearn.utils as utils
+#         utils.copyDirectory(old_path_model, self.BASE_PATH_LOG_MODEL)
 
-#             # Check if can be trained greedily:
-#             layer_dict['trained_greedily'] = False
-#             if isinstance(layer_factory, (layers.Conv2DLayer, layers.TransposedConv2DLayer)):
-#                 layer_dict['trained_greedily'] = True
+#         # Update paths:
+#         self.net.update_logs_path(self.BASE_PATH_LOG_MODEL)
+#         self._update_subNets_paths()
 
-#             # Check the immediate requirements of the layer:
-#             if isinstance(layer_factory, layers.InputLayer):
-#                 layer_dict['req'] = False
-#             else:
-#                 if 'incoming' in layer_kw:
-#                     layer_dict['req'] = [layer_kw['incoming']]
-#                 elif 'incomings' in layer_kw:
-#                     layer_dict['req'] = layer_kw['incomings']
+
+#     def load_subNets(self, preLoad):
+#         '''
+#         Input:
+#             - preLoad: a dictionary such that:
+#                 - the keys are the names of the nodes (e.g. 'cnv_L0_G0')
+#                 - each element contains a tuple such that:
+#                      (path_to_pretr_model, train_flag, nodes_trained)
+#                      ('logs/model_A/', True, nodes_trained)
+
+#         The third options indicates the pretrained nodes only in the case of a greedyLayer.
+
+#         In particular we have:
+#                 train = True if active_nodes>load[2] else False
+#         where the active_nodes are the one in the MAIN part of the net, w/o considering the new node.
+#         Conclusion: just put how many nodes have been aleardy trained in the MAIN part of the net (given by convSoft.active_nodes)
+
+#         What it does in order:
+#             - import subNets
+#             - copy folders/logs in main model (and delete previous versions)
+#             - update all paths of subNets
+#         '''
+#         warn("This mehtod is obsolete and needs to be updated.")
+#         self.preLoad = preLoad
+#         for net_name in preLoad:
+#             load = preLoad[net_name]
+#             if load[0]:
+#                 # Imported from other pretrained model:
+#                 subNet_old_path = load[0]+net_name+'/'
+#                 subNet_new_path = self.BASE_PATH_LOG_MODEL+net_name+'/'
+#                 if 'reg' in net_name:
+#                     self.regr[net_name] = utils.restore_model(subNet_old_path+'routine.pickle')
+#                 elif 'cnv' in net_name:
+#                     self.convSoftmax[net_name] = utils.restore_model(subNet_old_path+'routine.pickle')
 #                 else:
-#                     layer_dict['req'] = [self.layers_info[i-1]['name']]
+#                     raise ValueError("Not recognized netname")
+#                 # Delete possible previous folders:
+#                 utils.deleteDirectory(subNet_new_path[:-1])
+#                 # Copy old subNet:
+#                 # utils.create_dir(subNet_new_path)
+#                 utils.copyDirectory(subNet_old_path, subNet_new_path)
 
-#         # Contruct all possible ways from output to input:
-#         ways_to_input = [[self.layers_info[-1]['name']]]
-#         ways_to_input = self._detect_way_to_input(ways_to_input)
-
-
-
-#     def _detect_way_to_input(self, ways_to_input, idx_way=0):
-#         current_way = ways_to_input[idx_way]
-#         layer = current_way[-1]
-#         while self.layers_info[layer]['req']:
-#             if len(self.layers_info[layer]['req'])==1:
-#                 # Just one requirements:
-#                 current_way.insert(0,self.layers_info[layer]['req'][0])
-#             else:
-#                 # More requirements, create other ways:
-#                 for i in range(len(self.layers_info[layer]['req'])-1):
-#                     ways_to_input.append(copy(ways_to_input[idx_way]))
-
-#                 for i, req_layer in enumerate(self.layers_info[layer]['req']):
-#                     ways_to_input[idx_way+i].insert(0, req_layer)
-#                     ways_to_input = self._detect_way_to_input(ways_to_input, idx_way+i)
-#                 break
-
-#             layer = current_way[-1]
-
-#         return ways_to_input
+#         self._update_subNets_paths()
 
 
-
-#     def _layer_name(self, layer_class, index):
-#         '''
-#         Taken from nolearn library.
-#         '''
-#         return "{}{}".format(
-#             layer_class.__name__.lower().replace("layer", ""), index)
+#     def _update_subNets_paths(self):
+#         for net_name in self.regr:
+#             self.regr[net_name].net.update_logs_path(self.BASE_PATH_LOG_MODEL+net_name+'/')
+#         for net_name in self.convSoftmax:
+#             self.convSoftmax[net_name].net.update_logs_path(self.BASE_PATH_LOG_MODEL+net_name+'/')
 
 
+#     def pickle_greedyNET(self):
+#         utils.pickle_model(self, self.BASE_PATH_LOG_MODEL+'model.pickle')
 
-
-# netLayers = [
-#     # layer dealing with the input data
-#     (layers.InputLayer, {
-#         'name': 'inputLayer',
-#         'shape': (None, None, None, None)}),
-#     (layers.Conv2DLayer, {
-#         'name': 'conv1',
-#         'num_filters': 5,
-#         'filter_size': 3,
-#         'nonlinearity': rectify}),
-#     (layers.Conv2DLayer, {
-#         'name': 'conv2',
-#         'num_filters': 2,
-#         'filter_size': 3,
-#         'pad':'same',
-#         'nonlinearity': identity}),
-#     # New node:
-#     (layers.Conv2DLayer, {
-#         'incoming': 'inputLayer',
-#         'name': 'conv1_newNode',
-#         'num_filters': 5,
-#         'filter_size': 3,
-#         'pad':'same',
-#         'nonlinearity': rectify}),
-#     (layers.Conv2DLayer, {
-#         'name': 'conv2_newNode',
-#         'num_filters': 2,
-#         'filter_size': 3,
-#         'pad':'same',
-#         'nonlinearity': identity}),
-#     (boosting_mergeLayer, {
-#         'incomings': ['conv2', 'conv2_newNode'],
-#         'merge_function': T.add,
-#         'name': 'boosting_merge'}),
-#     (layers.NonlinearityLayer,{
-#         'name': 'final_nonlinearity',
-#         'incoming': 'boosting_merge',
-#         'nonlinearity': segm_utils.softmax_segm}),
-# ]
 
 
 
