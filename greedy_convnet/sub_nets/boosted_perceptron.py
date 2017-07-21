@@ -134,12 +134,13 @@ class boostedPerceptron(object):
 
         elif self.layer_type=="trans_conv":
             netLayers += [
-                (layers.TrasposedConv2DLayer, self.layer_kwargs),
-                (layers.TrasposedConv2DLayer, {
+                (layers.TransposedConv2DLayer, self.layer_kwargs),
+                (layers.Conv2DLayer, {
                     'name': 'greedyConv_2',
                     'num_filters': self.num_classes,
                     'filter_size': self.filter_size,
-                    'crop': self.layer_kwargs['crop'],
+                    # 'crop': self.layer_kwargs['crop'],
+                    'pad': 'same',
                     'W': Normal(std=self.init_weight),
                     'nonlinearity': segm_utils.softmax_segm})]
 
