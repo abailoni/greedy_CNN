@@ -18,7 +18,7 @@ import mod_nolearn.segm.segm_utils as segm_utils
 from mod_nolearn.segm import segmNeuralNet
 from greedy_convnet import BatchIterator_Greedy
 
-from greedy_convnet.sub_nets.greedyLayer import MaskLayer
+from greedy_convnet.sub_nets.greedy_layer import MaskLayer
 
 
 # This repetition of code should be solved...

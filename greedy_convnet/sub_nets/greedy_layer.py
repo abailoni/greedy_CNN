@@ -19,7 +19,7 @@ from mod_nolearn.segm import segmNeuralNet
 from greedy_convnet import BatchIterator_Greedy
 from various.utils import join_dict
 
-class greedyLayer_reload(object):
+class greedyLayer(object):
     '''
     # ---------------------------------------------
     # STRUCTURE OF THE CLASS: (main attributes)

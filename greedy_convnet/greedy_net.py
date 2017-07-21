@@ -21,7 +21,7 @@ import pretr_nets.vgg16 as vgg16
 
 from mod_nolearn.segm import segmNeuralNet
 import mod_nolearn.segm.segm_utils as segm_utils
-from greedy_convnet.sub_nets import greedyLayer_reload as greedyLayer
+from greedy_convnet.sub_nets import greedyLayer as greedyLayer
 
 from greedy_convnet.sub_nets import boostedPerceptron
 
@@ -90,12 +90,12 @@ class greedyNet(object):
                     {'name_trained_layer': [list_of_lasagne_params_values], ...}
 
         - self.subNets:
-            TYPE: dictionary containing istances of the classes greedyLayer_reload() and boostedPerceptron()
+            TYPE: dictionary containing istances of the classes greedyLayer() and boostedPerceptron()
             VALUE: dictionary containing the trained greedy networks and the networks used for training the perceptrons.
 
                 Structure:
                     {
-                        'name_trained_layer': istance of greedyLayer_reload(),
+                        'name_trained_layer': istance of greedyLayer(),
                         ...
                         'perceptron_name_trained_layer': istance of boostedPerceptron(),
                         ...
@@ -135,7 +135,7 @@ class greedyNet(object):
                         TYPE: string
                         VALUE: model name (the logs will be saved in BASE_PATH_LOG/model_name)
 
-                    - additional arguments passed to the initialization of greedyLayer_reload() and boostedPerceptron() instances
+                    - additional arguments passed to the initialization of greedyLayer() and boostedPerceptron() instances
                         (e.g. batch_size, eval_size, num_classes, batchShuffle...)
         '''
         self.input_layers = nolearn_layers
@@ -327,7 +327,7 @@ class greedyNet(object):
 
             - kwargs_finetune:
                 TYPE: dictionary
-                VALUES: arguments passed to the initialization method of the greedyLayer_reload() instance stored in self.subNets[trained_layer_name] (e.g. learning rate, type of update, etc)
+                VALUES: arguments passed to the initialization method of the greedyLayer() instance stored in self.subNets[trained_layer_name] (e.g. learning rate, type of update, etc)
 
             - kwargs:
                 TYPE: addictional argmuments
@@ -518,7 +518,7 @@ class greedyNet(object):
 
             - kwargs_finetune:
                 TYPE: dictionary
-                VALUES: arguments passed to the initialization method of the greedyLayer_reload() instance stored in self.subNets[trained_layer_name] (e.g. learning rate, type of update, etc)
+                VALUES: arguments passed to the initialization method of the greedyLayer() instance stored in self.subNets[trained_layer_name] (e.g. learning rate, type of update, etc)
 
         # OUTPUT:
             - number_pretrained_perceptrons (loaded from file)

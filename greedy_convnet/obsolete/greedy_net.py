@@ -20,7 +20,7 @@ import pretr_nets.vgg16 as vgg16
 from mod_nolearn.segm import segmNeuralNet
 import mod_nolearn.segm.segm_utils as segm_utils
 
-from greedy_convnet.sub_nets import greedyLayer, greedyLayer_ReLU, boostedNode, boostedNode_ReLU
+from greedy_convnet.sub_nets import greedy_layer, greedyLayer_ReLU, boostedNode, boostedNode_ReLU
 
 import various.utils as utils
 
@@ -57,7 +57,7 @@ class greedyNet(object):
         # ------------------------------------
         self.num_layers = 0
         if mod=='basic':
-            self.greedy_layer_class = greedyLayer
+            self.greedy_layer_class = greedy_layer
             self.boosted_node_class = boostedNode
         elif mod=='ReLU':
             self.greedy_layer_class = greedyLayer_ReLU

@@ -68,7 +68,7 @@ class boostedPerceptron(object):
                 VALUES: number of filters in perceptron
 
             - greedyLayer:
-                TYPE: instance of greedyLayer_reload()
+                TYPE: instance of greedyLayer()
                 VALUE: instance representing the full greedy trained layer
         '''
 
